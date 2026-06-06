@@ -29,6 +29,22 @@ HTML responses get a `<base href="/apps/{slug}/">` tag injected when one is not 
 
 Visit stats (HTML document views) appear in the app edit screen sidebar.
 
+## Build
+
+Create a versioned zip for wp-admin upload:
+
+```bash
+./build.sh
+```
+
+Bump the patch version and build:
+
+```bash
+./build.sh --bump
+```
+
+Output: `dist/mrmurphy-apps-{version}.zip`
+
 ## Development
 
 This repo lives next to [mrmurphy-theme](https://github.com/mrmurphy/mrmurphy-theme) under `~/projects/`.
