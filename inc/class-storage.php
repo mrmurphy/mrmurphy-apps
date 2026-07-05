@@ -71,7 +71,13 @@ class MRMurphy_Apps_Storage {
 	 * @return string
 	 */
 	public function get_app_directory( $slug ) {
-		return trailingslashit( self::get_base_directory() ) . sanitize_title( $slug );
+		$slug = sanitize_title( (string) $slug );
+
+		if ( '' === $slug ) {
+			return '';
+		}
+
+		return trailingslashit( self::get_base_directory() ) . $slug;
 	}
 
 	/**
@@ -245,9 +251,15 @@ class MRMurphy_Apps_Storage {
 	 * @param string $slug App slug.
 	 */
 	public function delete_app_files( $slug ) {
+		$slug = sanitize_title( (string) $slug );
+
+		if ( '' === $slug ) {
+			return;
+		}
+
 		$dir = $this->get_app_directory( $slug );
 
-		if ( is_dir( $dir ) ) {
+		if ( is_dir( $dir ) && $this->is_path_within_directory( $dir, self::get_base_directory() ) ) {
 			self::delete_directory( $dir );
 		}
 	}
