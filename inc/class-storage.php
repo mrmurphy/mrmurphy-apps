@@ -19,8 +19,12 @@ class MRMurphy_Apps_Storage {
 		'php3',
 		'php4',
 		'php5',
+		'php6',
 		'php7',
 		'php8',
+		'pht',
+		'phtm',
+		'phps',
 		'phar',
 		'cgi',
 		'pl',
@@ -28,7 +32,9 @@ class MRMurphy_Apps_Storage {
 		'aspx',
 		'jsp',
 		'shtml',
+		'shtm',
 		'htaccess',
+		'ini',
 	);
 
 	/** @var int */
@@ -348,15 +354,22 @@ class MRMurphy_Apps_Storage {
 		$htaccess = trailingslashit( $dir ) . '.htaccess';
 
 		if ( ! file_exists( $htaccess ) ) {
+			$pattern = implode( '|', array_map( fn( $ext ) => preg_quote( (string) $ext, '/' ), self::BLOCKED_EXTENSIONS ) );
 			file_put_contents(
 				$htaccess,
-				"<IfModule mod_php.c>\nphp_flag engine off\n</IfModule>\n<FilesMatch \"\\.(php|phtml|php[0-9]+|phar)$\">\nRequire all denied\n</FilesMatch>\n"
+				"<IfModule mod_php.c>\nphp_flag engine off\n</IfModule>\n<FilesMatch \"\\.(" . $pattern . ')$">' . "\nRequire all denied\n</FilesMatch>\n"
 			);
+		}
+
+		$index_html = trailingslashit( $dir ) . 'index.html';
+
+		if ( ! file_exists( $index_html ) ) {
+			file_put_contents( $index_html, '' );
 		}
 
 		$index = trailingslashit( $dir ) . 'index.php';
 
-		if ( ! file_exists( $index ) ) {
+		if ( ! file_exists( $index ) && ! file_exists( $index_html ) ) {
 			file_put_contents( $index, "<?php\n// Silence is golden.\n" );
 		}
 	}
