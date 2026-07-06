@@ -378,11 +378,5 @@ class MRMurphy_Apps_Storage {
 		if ( ! file_exists( $index_html ) ) {
 			file_put_contents( $index_html, '' );
 		}
-
-		$index = trailingslashit( $dir ) . 'index.php';
-
-		if ( ! file_exists( $index ) && ! file_exists( $index_html ) ) {
-			file_put_contents( $index, "<?php\n// Silence is golden.\n" );
-		}
 	}
 }
