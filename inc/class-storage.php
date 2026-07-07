@@ -231,6 +231,12 @@ class MRMurphy_Apps_Storage {
 
 			$stat = $zip->statIndex( $i );
 
+			if ( $stat['external_attr'] >> 16 & 0x0A ) {
+				$zip->close();
+				self::delete_directory( $temp_dir );
+				return new WP_Error( 'symlink_in_zip', __( 'Zip archive contains symlinks, which are not allowed.', 'mrmurphy-apps' ) );
+			}
+
 			$uncompressed = isset( $stat['size'] ) ? (int) $stat['size'] : 0;
 			$compressed   = isset( $stat['comp_size'] ) ? (int) $stat['comp_size'] : 0;
 
@@ -272,6 +278,12 @@ class MRMurphy_Apps_Storage {
 		$zip->close();
 
 		$source_dir = self::find_content_root( $temp_dir );
+
+		if ( '' === $source_dir ) {
+			$zip->close();
+			self::delete_directory( $temp_dir );
+			return new WP_Error( 'symlink_in_extracted', __( 'Extracted archive contains symlinks, which are not allowed.', 'mrmurphy-apps' ) );
+		}
 
 		if ( is_dir( $app_dir ) ) {
 			self::delete_directory( $app_dir );
@@ -340,7 +352,11 @@ class MRMurphy_Apps_Storage {
 
 		if ( 1 === count( $entries ) ) {
 			$only = wp_normalize_path( trailingslashit( $temp_dir ) . $entries[0] );
-			if ( is_dir( $only ) ) {
+			$lstat = @lstat( $only );
+			if ( $lstat && ( $lstat['mode'] & 0xA000 ) === 0xA000 ) {
+				return '';
+			}
+			if ( $lstat && ( $lstat['mode'] & 0x4000 ) ) {
 				return $only;
 			}
 		}
@@ -396,14 +412,31 @@ class MRMurphy_Apps_Storage {
 		);
 
 		foreach ( $items as $item ) {
-			if ( $item->isDir() ) {
-				rmdir( $item->getPathname() );
-			} else {
+			if ( is_link( $item->getPathname() ) ) {
 				unlink( $item->getPathname() );
+			} elseif ( $item->isDir() ) {
+				if ( ! @rmdir( $item->getPathname() ) ) {
+					$error = error_get_last();
+					if ( $error ) {
+						error_log( sprintf( 'Failed to remove directory %s: %s', $item->getPathname(), $error['message'] ) );
+					}
+				}
+			} else {
+				if ( ! @unlink( $item->getPathname() ) ) {
+					$error = error_get_last();
+					if ( $error ) {
+						error_log( sprintf( 'Failed to remove file %s: %s', $item->getPathname(), $error['message'] ) );
+					}
+				}
 			}
 		}
 
-		rmdir( $dir );
+		if ( ! @rmdir( $dir ) ) {
+			$error = error_get_last();
+			if ( $error ) {
+				error_log( sprintf( 'Failed to remove directory %s: %s', $dir, $error['message'] ) );
+			}
+		}
 	}
 
 	/**
