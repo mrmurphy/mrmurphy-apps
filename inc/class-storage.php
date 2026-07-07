@@ -280,18 +280,32 @@ class MRMurphy_Apps_Storage {
 		$source_dir = self::find_content_root( $temp_dir );
 
 		if ( '' === $source_dir ) {
-			$zip->close();
 			self::delete_directory( $temp_dir );
 			return new WP_Error( 'symlink_in_extracted', __( 'Extracted archive contains symlinks, which are not allowed.', 'mrmurphy-apps' ) );
 		}
 
+		$backup_dir = '';
 		if ( is_dir( $app_dir ) ) {
-			self::delete_directory( $app_dir );
+			$backup_dir = $app_dir . '.old-' . wp_generate_password( 8, false );
+			if ( ! @rename( $app_dir, $backup_dir ) ) {
+				self::delete_directory( $temp_dir );
+				return new WP_Error(
+					'backup_failed',
+					__( 'Could not back up existing app files. New upload aborted; existing files untouched.', 'mrmurphy-apps' )
+				);
+			}
 		}
 
 		if ( ! rename( $source_dir, $app_dir ) ) {
+			if ( $backup_dir ) {
+				@rename( $backup_dir, $app_dir );
+			}
 			self::delete_directory( $temp_dir );
 			return new WP_Error( 'move_failed', __( 'Could not move extracted files into place.', 'mrmurphy-apps' ) );
+		}
+
+		if ( $backup_dir && is_dir( $backup_dir ) ) {
+			self::delete_directory( $backup_dir );
 		}
 
 		if ( $source_dir !== $temp_dir && is_dir( $temp_dir ) ) {
