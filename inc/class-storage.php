@@ -40,6 +40,18 @@ class MRMurphy_Apps_Storage {
 	/** @var int */
 	private const MAX_ZIP_BYTES = 52428800; // 50 MB.
 
+	/** @var int */
+	private const MAX_UNCOMPRESSED_BYTES = 104857600; // 100 MB.
+
+	/** @var int */
+	private const MAX_ENTRY_COUNT = 5000;
+
+	/** @var int */
+	private const MAX_SINGLE_FILE_BYTES = 26214400; // 25 MB.
+
+	/** @var int */
+	private const MAX_COMPRESSION_RATIO = 100;
+
 	/**
 	 * Ensure the uploads directory exists and is protected.
 	 */
@@ -196,6 +208,10 @@ class MRMurphy_Apps_Storage {
 			return new WP_Error( 'zip_open_failed', __( 'Could not open zip archive.', 'mrmurphy-apps' ) );
 		}
 
+		$total_uncompressed = 0;
+		$total_compressed   = 0;
+		$entry_count        = 0;
+
 		for ( $i = 0; $i < $zip->numFiles; $i++ ) {
 			$name = wp_normalize_path( (string) $zip->getNameIndex( $i ) );
 
@@ -212,6 +228,39 @@ class MRMurphy_Apps_Storage {
 				self::delete_directory( $temp_dir );
 				return new WP_Error( 'blocked_extension', sprintf( __( 'Blocked file type in zip: %s', 'mrmurphy-apps' ), $name ) );
 			}
+
+			$stat = $zip->statIndex( $i );
+
+			$uncompressed = isset( $stat['size'] ) ? (int) $stat['size'] : 0;
+			$compressed   = isset( $stat['comp_size'] ) ? (int) $stat['comp_size'] : 0;
+
+			if ( $uncompressed > self::MAX_SINGLE_FILE_BYTES ) {
+				$zip->close();
+				self::delete_directory( $temp_dir );
+				return new WP_Error( 'zip_entry_too_large', __( 'A file in the zip exceeds the maximum allowed size.', 'mrmurphy-apps' ) );
+			}
+
+			$total_uncompressed += $uncompressed;
+			$total_compressed   += $compressed;
+			$entry_count++;
+
+			if ( $entry_count > self::MAX_ENTRY_COUNT ) {
+				$zip->close();
+				self::delete_directory( $temp_dir );
+				return new WP_Error( 'zip_too_many_entries', __( 'The zip contains too many files.', 'mrmurphy-apps' ) );
+			}
+
+			if ( $total_uncompressed > self::MAX_UNCOMPRESSED_BYTES ) {
+				$zip->close();
+				self::delete_directory( $temp_dir );
+				return new WP_Error( 'zip_uncompressed_too_large', __( 'The zip decompresses to more than the maximum allowed size.', 'mrmurphy-apps' ) );
+			}
+		}
+
+		if ( $total_compressed > 0 && ( $total_uncompressed / $total_compressed ) > self::MAX_COMPRESSION_RATIO ) {
+			$zip->close();
+			self::delete_directory( $temp_dir );
+			return new WP_Error( 'zip_ratio_too_high', __( 'The zip compression ratio exceeds the maximum allowed.', 'mrmurphy-apps' ) );
 		}
 
 		if ( ! $zip->extractTo( $temp_dir ) ) {
