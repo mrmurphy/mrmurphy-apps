@@ -231,7 +231,13 @@ class MRMurphy_Apps_Storage {
 
 			$stat = $zip->statIndex( $i );
 
-			if ( $stat['external_attr'] >> 16 & 0x0A ) {
+			if ( ! is_array( $stat ) || ! isset( $stat['external_attr'] ) ) {
+				$zip->close();
+				self::delete_directory( $temp_dir );
+				return new WP_Error( 'zip_stat_failed', __( 'Could not inspect zip entry metadata.', 'mrmurphy-apps' ) );
+			}
+
+			if ( ( $stat['external_attr'] >> 16 ) & 0x0A ) {
 				$zip->close();
 				self::delete_directory( $temp_dir );
 				return new WP_Error( 'symlink_in_zip', __( 'Zip archive contains symlinks, which are not allowed.', 'mrmurphy-apps' ) );
