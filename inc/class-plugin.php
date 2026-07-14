@@ -12,6 +12,7 @@ require_once MRMURPHY_APPS_DIR . 'inc/class-storage.php';
 require_once MRMURPHY_APPS_DIR . 'inc/class-router.php';
 require_once MRMURPHY_APPS_DIR . 'inc/class-stats.php';
 require_once MRMURPHY_APPS_DIR . 'inc/class-admin.php';
+require_once MRMURPHY_APPS_DIR . 'inc/class-rest.php';
 
 /**
  * Main plugin loader.
@@ -61,6 +62,8 @@ final class MRMurphy_Apps_Plugin {
 		if ( is_admin() ) {
 			$this->admin = new MRMurphy_Apps_Admin( $this->storage, $this->stats );
 		}
+
+		$this->rest = new MRMurphy_Apps_REST();
 	}
 
 	/**

@@ -33,11 +33,11 @@ bump_version() {
 	echo "${major}.${minor}.${patch}"
 }
 
-update_version() {
+	update_version() {
 	local new_version="$1"
 
-	sed -i '' -E "s/^(\s*\*\s*Version:[[:space:]]*)[0-9]+\.[0-9]+\.[0-9]+/\1${new_version}/" "$MAIN_FILE"
-	sed -i '' -E "s/define\([[:space:]]*'MRMURPHY_APPS_VERSION',[[:space:]]*'[0-9]+\.[0-9]+\.[0-9]+'\);/define( 'MRMURPHY_APPS_VERSION', '${new_version}' );/" "$MAIN_FILE"
+	sed -i '' -E "s/^([[:space:]]*\*[[:space:]]*Version:[[:space:]]*)[0-9]+\.[0-9]+\.[0-9]+/\1${new_version}/" "$MAIN_FILE"
+	sed -i '' -E "s/'MRMURPHY_APPS_VERSION', '[0-9]+\.[0-9]+\.[0-9]+'/'MRMURPHY_APPS_VERSION', '${new_version}'/" "$MAIN_FILE"
 	sed -i '' -E "s/^Stable tag:[[:space:]]*[0-9]+\.[0-9]+\.[0-9]+/Stable tag: ${new_version}/" "${PLUGIN_DIR}/readme.txt"
 }
 
