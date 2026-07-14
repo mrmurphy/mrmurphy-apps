@@ -3,7 +3,7 @@
  * Plugin Name:       MrMurphy Apps
  * Plugin URI:        https://github.com/mrmurphy/mrmurphy-apps
  * Description:       Host static HTML/JS/CSS apps at /apps/{slug} with visit tracking.
- * Version:           1.0.1
+ * Version:           1.0.3
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Murphy Randle
@@ -16,7 +16,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'MRMURPHY_APPS_VERSION', '1.0.1' );
+define( 'MRMURPHY_APPS_VERSION', '1.0.3' );
 define( 'MRMURPHY_APPS_FILE', __FILE__ );
 define( 'MRMURPHY_APPS_DIR', plugin_dir_path( __FILE__ ) );
 define( 'MRMURPHY_APPS_URL', plugin_dir_url( __FILE__ ) );

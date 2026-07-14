@@ -215,15 +215,17 @@ class MRMurphy_Apps_REST {
 	 * @return string
 	 */
 	private function build_instructions() {
-		$base_url = home_url( '/' . MRMURPHY_APPS_ROUTE_PREFIX . '/' );
+		$base_url   = home_url( '/' . MRMURPHY_APPS_ROUTE_PREFIX . '/' );
+		$api_base   = home_url( '/wp-json/mrmurphy-apps/v1' );
+		$version    = MRMURPHY_APPS_VERSION;
 
-		return <<<TXT
+		$text = <<<TXT
 MrMurphy Apps REST API — Agent Guide
 ======================================
 
-Base URL: {base_url}
-API Base: {api_base}
-Version:  {version}
+Base URL: %s
+API Base: %s
+Version:  %s
 
 Authentication
 --------------
@@ -237,56 +239,56 @@ Application passwords are available under your profile in wp-admin.
 Endpoints
 ---------
 
-1. GET {api_base}instructions
+1. GET %sinstructions
    Public — no auth required. Returns this guide as text/plain.
 
-2. POST {api_base}apps
+2. POST %sapps
    Create a new app.
    Body (JSON):
-     {{
+     {
        "title": "My App",
        "slug": "my-app",
        "zip_base64": "<base64-encoded zip>",
        "entry_file": "index.html"
-     }}
+     }
    slug, zip_base64, and entry_file are optional.
-   Response: {{ "id", "slug", "title", "status", "public_url", "entry_file", "file_count" }}
+   Response: { "id", "slug", "title", "status", "public_url", "entry_file", "file_count" }
 
-3. GET {api_base}apps
+3. GET %sapps
    List all apps (drafts + published).
-   Response: [ {{ "id", "slug", "title", "status", "public_url", "entry_file", "file_count" }} ]
+   Response: [ { "id", "slug", "title", "status", "public_url", "entry_file", "file_count" } ]
 
-4. GET {api_base}apps/{{slug}}
+4. GET %sapps/{slug}
    Get details for a specific app.
-   Response: {{ "id", "slug", "title", "status", "public_url", "entry_file", "files", "file_count", "stats" }}
+   Response: { "id", "slug", "title", "status", "public_url", "entry_file", "files", "file_count", "stats" }
 
-5. POST {api_base}apps/{{slug}}/upload
+5. POST %sapps/{slug}/upload
    Upload or replace the zip for an existing app.
    Body (JSON):
-     {{
+     {
        "zip_base64": "<base64-encoded zip>",
        "entry_file": "index.html"
-     }}
+     }
    entry_file is optional — auto-detected from zip contents.
 
-6. POST {api_base}apps/{{slug}}/publish
+6. POST %sapps/{slug}/publish
    Toggle an app between draft and published.
    Body (JSON):
-     {{ "status": "publish" }}
+     { "status": "publish" }
    status can be "publish" or "draft".
 
-7. DELETE {api_base}apps/{{slug}}
+7. DELETE %sapps/{slug}
    Delete an app post and all its stored files permanently.
 
 Public URL Pattern
 ------------------
-https://example.com/apps/{{slug}}/
+https://example.com/apps/{slug}/
 
 Build Process
 -------------
 Run ./build.sh in the plugin directory to create the zip.
 With --bump flag, it increments the patch version.
-Output: dist/mrmurphy-apps-{{version}}.zip
+Output: dist/mrmurphy-apps-{version}.zip
 
 Zip contents should be static HTML/JS/CSS/asset files.
 No server-side code (PHP, Python, etc.).
@@ -301,6 +303,21 @@ Error Responses
 500 — Server error
 
 TXT;
+
+		return sprintf(
+			$text,
+			$base_url,
+			$api_base,
+			$version,
+			$api_base,
+			$api_base,
+			$api_base,
+			$api_base,
+			$api_base,
+			$api_base,
+			$api_base,
+			$api_base
+		);
 	}
 
 	/* ------------------------------------------------------------------ */
@@ -653,7 +670,7 @@ TXT;
 	/**
 	 * Decode a base64 zip and import it into the app.
 	 *
-	 * Cleans up the temp file on exit via shutdown handler.
+	 * Cleans up the temp file after import.
 	 *
 	 * @param int    $post_id    App post ID.
 	 * @param string $zip_base64 Base64-encoded zip.
@@ -668,15 +685,6 @@ TXT;
 		}
 
 		$temp_file = trailingslashit( sys_get_temp_dir() ) . 'mrmurphy-apps-' . wp_generate_password( 16, false ) . '.zip';
-
-		// Register cleanup on shutdown in case of early exit.
-		register_shutdown_function(
-			function () use ( $temp_file ) {
-				if ( file_exists( $temp_file ) ) {
-					@unlink( $temp_file ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
-				}
-			}
-		);
 
 		file_put_contents( $temp_file, $decoded ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 
@@ -707,6 +715,18 @@ TXT;
 	 */
 	private function app_response( $post_id, $entry_file = '' ) {
 		$post = get_post( (int) $post_id );
+
+		if ( ! $post ) {
+			return array(
+				'id'         => 0,
+				'slug'       => '',
+				'title'      => '',
+				'status'     => '',
+				'public_url' => '',
+				'entry_file' => $entry_file,
+				'file_count' => 0,
+			);
+		}
 
 		if ( '' === $entry_file ) {
 			$entry_file = MRMurphy_Apps_CPT::get_entry_file( (int) $post_id );

@@ -37,6 +37,9 @@ final class MRMurphy_Apps_Plugin {
 	/** @var MRMurphy_Apps_Admin */
 	public $admin;
 
+	/** @var MRMurphy_Apps_REST */
+	public $rest;
+
 	/**
 	 * Singleton accessor.
 	 *
