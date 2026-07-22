@@ -116,6 +116,11 @@ class MRMurphy_Apps_CPT {
 	/**
 	 * Get a published app by slug.
 	 *
+	 * Uses 'name' (not 'post_name__in') because post_status is explicitly
+	 * 'publish' — WordPress 6.7+ restricts 'name' to published posts by
+	 * default, which is the desired behavior here. For admin lookups that
+	 * need drafts use 'post_name__in' with 'post_status' => 'any'.
+	 *
 	 * @param string $slug App slug.
 	 * @return WP_Post|null
 	 */

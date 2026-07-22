@@ -94,6 +94,7 @@ class MRMurphy_Apps_Router {
 			}
 
 			$body = $this->inject_base_tag( $body, $slug );
+			$body = $this->inject_app_data( $body, $slug );
 			$this->log_visit( $app, $relative_path );
 
 			status_header( 200 );
@@ -121,11 +122,15 @@ class MRMurphy_Apps_Router {
 	 * @return string
 	 */
 	private function inject_base_tag( $html, $slug ) {
-		if ( false !== stripos( $html, '<base' ) ) {
+		if ( preg_match( '/<base[^>]+href\s*=/i', $html ) ) {
 			return $html;
 		}
 
-		$base_href = trailingslashit( home_url( '/' . MRMURPHY_APPS_ROUTE_PREFIX . '/' . $slug ) );
+		$uploads = wp_upload_dir();
+		if ( ! empty( $uploads['error'] ) ) {
+			return $html;
+		}
+		$base_href = trailingslashit( $uploads['baseurl'] . '/mrmurphy-apps/' . $slug );
 		$base_tag  = '<base href="' . esc_url( $base_href ) . '">';
 
 		if ( preg_match( '/<head[^>]*>/i', $html ) ) {
@@ -133,6 +138,42 @@ class MRMurphy_Apps_Router {
 		}
 
 		return '<head>' . $base_tag . '</head>' . $html;
+	}
+
+	/**
+	 * Inject REST nonce and user info into the app HTML.
+	 *
+	 * The injected window.mrmurphyApps object includes the app's API base
+	 * so static apps can target endpoints scoped under /apps/{slug}/.
+	 *
+	 * @param string $html HTML content.
+	 * @param string $slug App slug.
+	 * @return string
+	 */
+	private function inject_app_data( $html, $slug ) {
+		$user = wp_get_current_user();
+		$data = array(
+			'slug'      => $slug,
+			'namespace' => 'mrmurphy-apps/v1',
+			'root'      => esc_url_raw( rest_url() ),
+			'apiBase'   => esc_url_raw( rest_url( 'apps/v1/' . $slug ) ),
+			'nonce'     => wp_create_nonce( 'mrmurphy_apps:scope:' . $slug ),
+		);
+
+		if ( $user->exists() ) {
+			$data['user'] = array(
+				'id'           => (int) $user->ID,
+				'display_name' => $user->display_name,
+			);
+		}
+
+		$script = '<script>window.mrmurphyApps=' . wp_json_encode( $data ) . ';</script>';
+
+		if ( preg_match( '/<head[^>]*>/i', $html ) ) {
+			return preg_replace( '/(<head[^>]*>)/i', '$1' . "\n" . $script, $html, 1 );
+		}
+
+		return $script . "\n" . $html;
 	}
 
 	/**

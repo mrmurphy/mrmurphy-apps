@@ -82,13 +82,48 @@ final class MRMurphy_Apps_Plugin {
 		MRMurphy_Apps_Stats::create_table();
 		MRMurphy_Apps_Storage::ensure_uploads_directory();
 
+		self::add_capabilities();
+
 		flush_rewrite_rules();
+	}
+
+	/**
+	 * Register capabilities and roles.
+	 */
+	public static function add_capabilities() {
+		$cap = 'manage_mrmurphy_apps';
+
+		// Grant to Administrator.
+		$admin = get_role( 'administrator' );
+		if ( $admin instanceof WP_Role ) {
+			$admin->add_cap( $cap, true );
+		}
+
+		// Add dedicated agent role.
+		add_role(
+			'mrmurphy_agent',
+			__( 'MrMurphy Agent', 'mrmurphy-apps' ),
+			array(
+				'read'        => true,
+				$cap          => true,
+				'level_0'     => true,
+			)
+		);
 	}
 
 	/**
 	 * Run on plugin deactivation.
 	 */
 	public static function deactivate() {
+		$cap = 'manage_mrmurphy_apps';
+
+		$admin = get_role( 'administrator' );
+		if ( $admin instanceof WP_Role ) {
+			$admin->remove_cap( $cap );
+		}
+
+		remove_role( 'mrmurphy_agent' );
+
 		flush_rewrite_rules();
 	}
 }

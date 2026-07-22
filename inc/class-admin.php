@@ -34,6 +34,9 @@ class MRMurphy_Apps_Admin {
 		add_action( 'save_post_mrmurphy_app', array( $this, 'handle_upload' ), 10, 2 );
 		add_action( 'before_delete_post', array( $this, 'delete_app_files' ) );
 		add_filter( 'post_updated_messages', array( $this, 'updated_messages' ) );
+		add_action( 'admin_menu', array( $this, 'add_getting_started_page' ) );
+		add_action( 'admin_menu', array( $this, 'add_agent_instructions_link' ) );
+		add_action( 'admin_post_mrmurphy_create_agent', array( $this, 'handle_create_agent' ) );
 	}
 
 	/**
@@ -139,6 +142,273 @@ class MRMurphy_Apps_Admin {
 			<p><?php esc_html_e( 'No files uploaded yet.', 'mrmurphy-apps' ); ?></p>
 		<?php endif; ?>
 		<?php
+	}
+
+	/**
+	 * Register the Getting Started submenu page.
+	 */
+	public function add_getting_started_page() {
+		add_submenu_page(
+			'edit.php?post_type=mrmurphy_app',
+			__( 'Getting Started', 'mrmurphy-apps' ),
+			__( 'Getting Started', 'mrmurphy-apps' ),
+			'manage_mrmurphy_apps',
+			'mrmurphy-apps-getting-started',
+			array( $this, 'render_getting_started' )
+		);
+	}
+
+	/**
+	 * Render the Getting Started page.
+	 */
+	public function render_getting_started() {
+		$mgmt_base = home_url( '/wp-json/mrmurphy-apps/v1' );
+		$app_api   = home_url( '/wp-json/apps/v1/{slug}' );
+		$site_url  = home_url();
+		$admin_url = admin_url();
+
+		$agent_user    = null;
+		$app_password  = null;
+		$agent_created = false;
+
+		$created = get_transient( 'mrmurphy_agent_created' );
+		if ( $created ) {
+			$agent_created  = true;
+			$agent_user     = $created['user'];
+			$app_password   = $created['password'];
+			delete_transient( 'mrmurphy_agent_created' );
+		}
+		?>
+		<div class="wrap">
+			<h1><?php esc_html_e( 'Getting Started — MrMurphy Apps', 'mrmurphy-apps' ); ?></h1>
+
+			<hr>
+
+			<h2 style="margin-top:2em"><?php esc_html_e( 'For AI Agents', 'mrmurphy-apps' ); ?></h2>
+
+			<p><?php esc_html_e( 'Point your agent to these REST API bases:', 'mrmurphy-apps' ); ?></p>
+
+			<table class="widefat striped" style="max-width:700px;margin-bottom:2em">
+				<thead><tr>
+					<th style="width:120px"><?php esc_html_e( 'API', 'mrmurphy-apps' ); ?></th>
+					<th><?php esc_html_e( 'Base URL', 'mrmurphy-apps' ); ?></th>
+					<th><?php esc_html_e( 'Auth', 'mrmurphy-apps' ); ?></th>
+				</tr></thead>
+				<tbody>
+					<tr>
+						<td><strong><?php esc_html_e( 'Management', 'mrmurphy-apps' ); ?></strong></td>
+						<td><code><?php echo esc_url( $mgmt_base ); ?></code></td>
+						<td><?php esc_html_e( 'Application Password', 'mrmurphy-apps' ); ?></td>
+					</tr>
+					<tr>
+						<td><strong><?php esc_html_e( 'App Data', 'mrmurphy-apps' ); ?></strong></td>
+						<td><code><?php echo esc_url( $app_api ); ?></code></td>
+						<td><?php esc_html_e( 'Cookie + scoped nonce (injected)', 'mrmurphy-apps' ); ?></td>
+					</tr>
+				</tbody>
+			</table>
+
+			<p>
+				<a href="<?php echo esc_url( rest_url( 'mrmurphy-apps/v1/instructions' ) ); ?>" target="_blank" class="button">
+					<?php esc_html_e( 'View Full API Guide', 'mrmurphy-apps' ); ?>
+				</a>
+			</p>
+
+			<hr>
+
+			<h2 style="margin-top:2em"><?php esc_html_e( 'Create an Agent User', 'mrmurphy-apps' ); ?></h2>
+
+			<p>
+				<?php esc_html_e( 'Create a dedicated user with the "MrMurphy Agent" role. This role has access to the management API but cannot access wp-admin settings or content.', 'mrmurphy-apps' ); ?>
+				<?php esc_html_e( 'The user will be given an application password — save it now, it will not be shown again.', 'mrmurphy-apps' ); ?>
+			</p>
+
+			<?php if ( $agent_created && $agent_user && $app_password ) : ?>
+				<div class="notice notice-success notice-alt" style="margin:1em 0">
+					<p><strong><?php esc_html_e( 'Agent user created!', 'mrmurphy-apps' ); ?></strong></p>
+					<table style="margin:0.5em 0">
+						<tr><td style="padding-right:1em"><strong><?php esc_html_e( 'Username', 'mrmurphy-apps' ); ?></strong></td>
+							<td><code><?php echo esc_html( $agent_user ); ?></code></td></tr>
+						<tr><td style="padding-right:1em"><strong><?php esc_html_e( 'App Password', 'mrmurphy-apps' ); ?></strong></td>
+							<td><code style="font-size:1.1em"><?php echo esc_html( $app_password ); ?></code></td></tr>
+					</table>
+					<p><em><?php esc_html_e( 'This password will not be shown again. Store it securely.', 'mrmurphy-apps' ); ?></em></p>
+				</div>
+			<?php endif; ?>
+
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="max-width:400px">
+				<?php wp_nonce_field( 'mrmurphy_create_agent', 'mrmurphy_create_agent_nonce' ); ?>
+				<input type="hidden" name="action" value="mrmurphy_create_agent">
+
+				<table class="form-table">
+					<tr>
+						<th scope="row"><label for="agent_username"><?php esc_html_e( 'Username', 'mrmurphy-apps' ); ?></label></th>
+						<td><input type="text" id="agent_username" name="agent_username" class="regular-text" value="agent" required></td>
+					</tr>
+					<tr>
+						<th scope="row"><label for="agent_email"><?php esc_html_e( 'Email', 'mrmurphy-apps' ); ?></label></th>
+						<td><input type="email" id="agent_email" name="agent_email" class="regular-text" placeholder="agent@example.com" required></td>
+					</tr>
+					<tr>
+						<th scope="row"><label for="agent_display_name"><?php esc_html_e( 'Display Name', 'mrmurphy-apps' ); ?></label></th>
+						<td><input type="text" id="agent_display_name" name="agent_display_name" class="regular-text" value="AI Agent"></td>
+					</tr>
+				</table>
+
+				<p class="submit">
+					<button type="submit" class="button button-primary"><?php esc_html_e( 'Create Agent User', 'mrmurphy-apps' ); ?></button>
+				</p>
+			</form>
+
+			<hr>
+
+			<h2 style="margin-top:2em"><?php esc_html_e( 'Manual Setup (WP-CLI)', 'mrmurphy-apps' ); ?></h2>
+
+			<pre style="background:#f0f0f1;padding:1em;max-width:800px;overflow-x:auto"># Create the user and generate an application password:
+wp user create agent agent@example.com \
+  --role=mrmurphy_agent \
+  --display_name="AI Agent" \
+  --user_pass
+
+# The command will output the generated password.
+
+# Create an application password for an existing user:
+wp user application-password create agent "opencode"</pre>
+
+			<hr>
+
+			<h2 style="margin-top:2em"><?php esc_html_e( 'Agent Config Example', 'mrmurphy-apps' ); ?></h2>
+
+			<p><?php esc_html_e( 'Add these environment variables to your agent\'s configuration:', 'mrmurphy-apps' ); ?></p>
+
+			<pre style="background:#f0f0f1;padding:1em;max-width:800px;overflow-x:auto">WP_USER=agent
+WP_APP_PASSWORD="xxxx xxxx xxxx xxxx xxxx xxxx"
+WP_URL="<?php echo esc_url( $site_url ); ?>"
+WP_MGMT_API="<?php echo esc_url( $mgmt_base ); ?>"
+WP_APP_API="<?php echo esc_url( home_url( '/wp-json/apps/v1/{slug}' ) ); ?>"
+
+# Then call the API:
+# curl -u "$WP_USER:$WP_APP_PASSWORD" "$WP_MGMT_API/apps"
+# curl -u "$WP_USER:$WP_APP_PASSWORD" "$WP_MGMT_API/apps/my-app/upload" \
+#   -H "Content-Type: application/json" \
+#   -d '{"zip_base64": "<base64-zip>"}'</pre>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Add an "Agent Instructions" submenu page that renders the API guide inline.
+	 */
+	public function add_agent_instructions_link() {
+		add_submenu_page(
+			'edit.php?post_type=mrmurphy_app',
+			__( 'Agent Instructions', 'mrmurphy-apps' ),
+			__( 'Agent Instructions', 'mrmurphy-apps' ),
+			'manage_mrmurphy_apps',
+			'mrmurphy-agent-instructions',
+			array( $this, 'render_instructions_page' )
+		);
+	}
+
+	/**
+	 * Render the full API guide inside an admin page with a copy-to-clipboard button.
+	 */
+	public function render_instructions_page() {
+		$instructions = MRMurphy_Apps_REST::build_instructions();
+		?>
+		<div class="wrap">
+			<h1><?php esc_html_e( 'Agent Instructions', 'mrmurphy-apps' ); ?></h1>
+			<p><?php esc_html_e( 'Copy this guide and paste it into an AI agent to let it learn the API:', 'mrmurphy-apps' ); ?></p>
+			<p>
+				<button id="mrmurphy-copy-instructions" class="button button-primary" onclick="
+					var ta = document.getElementById('mrmurphy-instructions-text');
+					ta.select();
+					ta.setSelectionRange(0, ta.value.length);
+					document.execCommand('copy');
+					this.textContent = this.dataset.copied;
+					var btn = this;
+					setTimeout(function(){ btn.textContent = btn.dataset.original; }, 2000);
+				" data-original="Copy to Clipboard" data-copied="Copied!">Copy to Clipboard</button>
+			</p>
+			<textarea id="mrmurphy-instructions-text" readonly style="width:100%;height:70vh;font-family:monospace;font-size:13px;line-height:1.5;padding:1em;background:#f0f0f1;border:1px solid #c3c4c7;white-space:pre;overflow:auto;tab-size:2;box-sizing:border-box"><?php echo esc_html( $instructions ); ?></textarea>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Handle the Create Agent form submission.
+	 */
+	public function handle_create_agent() {
+		if ( ! isset( $_POST['mrmurphy_create_agent_nonce'] )
+			|| ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['mrmurphy_create_agent_nonce'] ) ), 'mrmurphy_create_agent' )
+		) {
+			wp_die( esc_html__( 'Security check failed.', 'mrmurphy-apps' ) );
+		}
+
+		if ( ! current_user_can( 'manage_mrmurphy_apps' ) ) {
+			wp_die( esc_html__( 'You do not have permission to create users.', 'mrmurphy-apps' ) );
+		}
+
+		$username     = sanitize_user( wp_unslash( $_POST['agent_username'] ?? '' ) );
+		$email        = sanitize_email( wp_unslash( $_POST['agent_email'] ?? '' ) );
+		$display_name = sanitize_text_field( wp_unslash( $_POST['agent_display_name'] ?? '' ) );
+
+		if ( '' === $username || '' === $email ) {
+			wp_die( esc_html__( 'Username and email are required.', 'mrmurphy-apps' ) );
+		}
+
+		if ( username_exists( $username ) ) {
+			wp_die( esc_html__( 'That username already exists.', 'mrmurphy-apps' ) );
+		}
+
+		if ( email_exists( $email ) ) {
+			wp_die( esc_html__( 'That email is already in use.', 'mrmurphy-apps' ) );
+		}
+
+		$password = wp_generate_password( 24, true, false );
+
+		$user_id = wp_insert_user(
+			array(
+				'user_login'   => $username,
+				'user_email'   => $email,
+				'display_name' => $display_name ?: $username,
+				'role'         => 'mrmurphy_agent',
+				'user_pass'    => $password,
+			)
+		);
+
+		if ( is_wp_error( $user_id ) ) {
+			wp_die( esc_html( $user_id->get_error_message() ) );
+		}
+
+		// Generate an application password for the new user.
+		if ( ! class_exists( 'WP_Application_Passwords' ) ) {
+			require_once ABSPATH . 'wp-includes/class-wp-application-passwords.php';
+		}
+		$app_pass_result = WP_Application_Passwords::create_new_application_password( $user_id, array( 'name' => 'opencode' ) );
+
+		if ( is_wp_error( $app_pass_result ) ) {
+			wp_die( esc_html( $app_pass_result->get_error_message() ) );
+		}
+
+		list( $new_password, $item ) = $app_pass_result;
+
+		set_transient(
+			'mrmurphy_agent_created',
+			array(
+				'user'     => $username,
+				'password' => $new_password,
+			),
+			60
+		);
+
+		wp_safe_redirect(
+			add_query_arg(
+				array( 'post_type' => 'mrmurphy_app', 'page' => 'mrmurphy-apps-getting-started' ),
+				admin_url( 'edit.php' )
+			)
+		);
+		exit;
 	}
 
 	/**

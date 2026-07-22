@@ -14,25 +14,6 @@ class MRMurphy_Apps_Storage {
 
 	/** @var string[] */
 	private const BLOCKED_EXTENSIONS = array(
-		'php',
-		'phtml',
-		'php3',
-		'php4',
-		'php5',
-		'php6',
-		'php7',
-		'php8',
-		'pht',
-		'phtm',
-		'phps',
-		'phar',
-		'cgi',
-		'pl',
-		'asp',
-		'aspx',
-		'jsp',
-		'shtml',
-		'shtm',
 		'htaccess',
 		'ini',
 	);
@@ -231,13 +212,13 @@ class MRMurphy_Apps_Storage {
 
 			$stat = $zip->statIndex( $i );
 
-			if ( ! is_array( $stat ) || ! isset( $stat['external_attr'] ) ) {
+			if ( ! is_array( $stat ) ) {
 				$zip->close();
 				self::delete_directory( $temp_dir );
 				return new WP_Error( 'zip_stat_failed', __( 'Could not inspect zip entry metadata.', 'mrmurphy-apps' ) );
 			}
 
-			if ( ( $stat['external_attr'] >> 16 ) & 0x0A ) {
+			if ( isset( $stat['external_attr'] ) && ( ( $stat['external_attr'] >> 16 ) & 0x0A ) ) {
 				$zip->close();
 				self::delete_directory( $temp_dir );
 				return new WP_Error( 'symlink_in_zip', __( 'Zip archive contains symlinks, which are not allowed.', 'mrmurphy-apps' ) );
@@ -322,6 +303,21 @@ class MRMurphy_Apps_Storage {
 
 		$entry = self::detect_entry_file( $app_dir );
 		update_post_meta( $post_id, MRMURPHY_APPS_META_ENTRY, $entry );
+
+		// Run the app's server-side init script if present.
+		$init_file = trailingslashit( $app_dir ) . 'server/init.php';
+		if ( file_exists( $init_file ) ) {
+			$mrmurphy_app_slug = $slug;
+			try {
+				include $init_file;
+			} catch ( Throwable $e ) {
+				error_log( sprintf(
+					'mrmurphy-apps: Fatal in init.php for app "%s": %s',
+					$slug,
+					$e->getMessage()
+				) );
+			}
+		}
 
 		return true;
 	}
