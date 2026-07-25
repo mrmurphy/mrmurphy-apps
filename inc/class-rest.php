@@ -39,6 +39,7 @@ class MRMurphy_Apps_REST {
 		add_action( 'save_post_mrmurphy_app', array( $this, 'flush_routes_cache' ) );
 		add_action( 'before_delete_post', array( $this, 'flush_routes_cache' ) );
 		add_filter( 'rest_authentication_errors', array( $this, 'check_scoped_nonce' ), 5 );
+		add_filter( 'rest_authentication_errors', array( $this, 'check_evar_nonce' ), 5 );
 		add_filter( 'rest_pre_serve_request', array( $this, 'serve_instructions_raw' ), 10, 4 );
 	}
 
@@ -336,6 +337,151 @@ class MRMurphy_Apps_REST {
 				),
 			)
 		);
+
+		/* ------------------------------------------------------------------ */
+		/*  Evar Routes                                                       */
+		/* ------------------------------------------------------------------ */
+
+		// GET /apps/{slug}/evars — List app evars (masked).
+		register_rest_route(
+			$mgmt,
+			'/apps/(?P<slug>[^/]+)/evars',
+			array(
+				array(
+					'methods'             => WP_REST_Server::READABLE,
+					'callback'            => array( $this, 'list_app_evars' ),
+					'permission_callback' => array( $this, 'check_permissions' ),
+					'args'                => array(
+						'slug' => array(
+							'required' => true,
+							'type'     => 'string',
+						),
+					),
+				),
+				array(
+					'methods'             => WP_REST_Server::CREATABLE,
+					'callback'            => array( $this, 'upsert_app_evar' ),
+					'permission_callback' => array( $this, 'check_permissions' ),
+					'args'                => array(
+						'slug'  => array(
+							'required' => true,
+							'type'     => 'string',
+						),
+						'name'  => array(
+							'required'          => true,
+							'type'              => 'string',
+							'validate_callback' => array( $this, 'validate_evar_name_callback' ),
+						),
+						'value' => array(
+							'required'          => true,
+							'type'              => 'string',
+							'validate_callback' => array( $this, 'validate_evar_value_callback' ),
+						),
+					),
+				),
+			)
+		);
+
+		// GET /apps/{slug}/evars/{name} — Get app evar (unmasked).
+		// DELETE /apps/{slug}/evars/{name} — Delete app evar.
+		register_rest_route(
+			$mgmt,
+			'/apps/(?P<slug>[^/]+)/evars/(?P<name>[^/]+)',
+			array(
+				array(
+					'methods'             => WP_REST_Server::READABLE,
+					'callback'            => array( $this, 'get_app_evar' ),
+					'permission_callback' => array( $this, 'check_permissions' ),
+					'args'                => array(
+						'slug' => array(
+							'required' => true,
+							'type'     => 'string',
+						),
+						'name' => array(
+							'required' => true,
+							'type'     => 'string',
+						),
+					),
+				),
+				array(
+					'methods'             => WP_REST_Server::DELETABLE,
+					'callback'            => array( $this, 'delete_app_evar' ),
+					'permission_callback' => array( $this, 'check_permissions' ),
+					'args'                => array(
+						'slug' => array(
+							'required' => true,
+							'type'     => 'string',
+						),
+						'name' => array(
+							'required' => true,
+							'type'     => 'string',
+						),
+					),
+				),
+			)
+		);
+
+		// GET /global-evars — List global evars (masked).
+		// POST /global-evars — Create/update global evar.
+		register_rest_route(
+			$mgmt,
+			'/global-evars',
+			array(
+				array(
+					'methods'             => WP_REST_Server::READABLE,
+					'callback'            => array( $this, 'list_global_evars' ),
+					'permission_callback' => array( $this, 'check_manage_options' ),
+				),
+				array(
+					'methods'             => WP_REST_Server::CREATABLE,
+					'callback'            => array( $this, 'upsert_global_evar' ),
+					'permission_callback' => array( $this, 'check_manage_options' ),
+					'args'                => array(
+						'name'  => array(
+							'required'          => true,
+							'type'              => 'string',
+							'validate_callback' => array( $this, 'validate_evar_name_callback' ),
+						),
+						'value' => array(
+							'required'          => true,
+							'type'              => 'string',
+							'validate_callback' => array( $this, 'validate_evar_value_callback' ),
+						),
+					),
+				),
+			)
+		);
+
+		// GET /global-evars/{name} — Get global evar (unmasked).
+		// DELETE /global-evars/{name} — Delete global evar.
+		register_rest_route(
+			$mgmt,
+			'/global-evars/(?P<name>[^/]+)',
+			array(
+				array(
+					'methods'             => WP_REST_Server::READABLE,
+					'callback'            => array( $this, 'get_global_evar' ),
+					'permission_callback' => array( $this, 'check_manage_options' ),
+					'args'                => array(
+						'name' => array(
+							'required' => true,
+							'type'     => 'string',
+						),
+					),
+				),
+				array(
+					'methods'             => WP_REST_Server::DELETABLE,
+					'callback'            => array( $this, 'delete_global_evar' ),
+					'permission_callback' => array( $this, 'check_manage_options' ),
+					'args'                => array(
+						'name' => array(
+							'required' => true,
+							'type'     => 'string',
+						),
+					),
+				),
+			)
+		);
 	}
 
 	/**
@@ -459,23 +605,29 @@ Agent Setup (for the human operator)
 1. Go to Apps &rarr; Getting Started in wp-admin:
    %s/wp-admin/admin.php?page=mrmurphy-apps-getting-started
 
-2. Create an "Agent" user with the MrMurphy Agent role.
+2. Create an &quot;Agent&quot; user with the MrMurphy Agent role.
    The page will show you the generated application password once.
 
-3. Provide the agent with two environment variables instead of
-   pasting credentials into prompts:
+3. Store credentials in the evar API instead of pasting
+   them into prompts:
 
-   MRMURPHY_APPS_USERNAME=agent
-   MRMURPHY_APPS_PASSWORD="<the generated password>"
-   MRMURPHY_APPS_URL="%s"
+   curl -X POST %s/global-evars \
+     -u &quot;agent:password&quot; \
+     -H &quot;Content-Type: application/json&quot; \
+     -d '{&quot;name&quot;:&quot;MRMURPHY_APPS_USERNAME&quot;,&quot;value&quot;:&quot;agent&quot;}'
+   curl -X POST %s/global-evars \
+     -u &quot;agent:password&quot; \
+     -H &quot;Content-Type: application/json&quot; \
+     -d '{&quot;name&quot;:&quot;MRMURPHY_APPS_PASSWORD&quot;,&quot;value&quot;:&quot;&lt;password&gt;&quot;}'
+   curl -X POST %s/global-evars \
+     -u &quot;agent:password&quot; \
+     -H &quot;Content-Type: application/json&quot; \
+     -d '{&quot;name&quot;:&quot;MRMURPHY_APPS_URL&quot;,&quot;value&quot;:&quot;%s&quot;}'
 
+   Or use the Getting Started admin page to pre-fill them.
    Most agents support evars (environment variables) set in their
    configuration or profile. Credentials in evars stay out of
    conversation history and prompt context.
-
-4. The agent uses these evars to authenticate:
-
-   curl -u "$MRMURPHY_APPS_USERNAME:$MRMURPHY_APPS_PASSWORD" "$MRMURPHY_APPS_URL/wp-json/mrmurphy-apps/v1/apps"
 
 Creating an Agent User (WP-CLI alternative)
 --------------------------------------------
@@ -646,27 +798,59 @@ Error Responses
 409 — Conflict (e.g., slug already exists)
 500 — Server error
 
+----------------------------------------------------------------------
+Environment Variables
+----------------------------------------------------------------------
+
+The API supports storing environment variables (evars) for apps and
+system-wide. Agents can manage these programmatically:
+
+  GET    %s/apps/{slug}/evars                  — List evar names (masked values)
+  POST   %s/apps/{slug}/evars                  — Create/update an evar
+  GET    %s/apps/{slug}/evars/VAR_NAME         — Get full evar value
+  DELETE %s/apps/{slug}/evars/VAR_NAME         — Delete an evar
+
+Global evars:
+
+  GET    %s/global-evars                       — List global evar names (masked)
+  POST   %s/global-evars                       — Create/update a global evar
+  GET    %s/global-evars/VAR_NAME              — Get full global evar value
+  DELETE %s/global-evars/VAR_NAME              — Delete a global evar
+
+Variable names must match: ^[A-Z_][A-Z0-9_]{1,63}$
+Values are returned masked in list responses, unmasked in individual get responses.
+
 TXT;
 
 		return sprintf(
 			$text,
-			$base_url,
-			$mgmt_base,
-			$app_base,
-			$version,
-			$mgmt_base,
-			$site_url,
-			$site_url,
-			$mgmt_base,
-			$mgmt_base,
-			$mgmt_base,
-			$mgmt_base,
-			$mgmt_base,
-			$mgmt_base,
-			$mgmt_base,
-			$mgmt_base,
-			$app_base,
-			$app_base
+			$base_url,         // 1
+			$mgmt_base,        // 2
+			$app_base,         // 3
+			$version,          // 4
+			$mgmt_base,        // 5 curl example
+			$site_url,         // 6 Getting Started URL
+			$mgmt_base,        // 7 Agent Setup curl 1
+			$mgmt_base,        // 8 Agent Setup curl 2
+			$mgmt_base,        // 9 Agent Setup curl 3
+			$site_url,         // 10 Agent Setup MRMURPHY_APPS_URL
+			$mgmt_base,        // 11 GET %s/instructions
+			$mgmt_base,        // 12 POST %s/apps
+			$mgmt_base,        // 13 GET %s/apps
+			$mgmt_base,        // 14 GET %s/apps/{slug}
+			$mgmt_base,        // 15 POST %s/apps/{slug}/upload
+			$mgmt_base,        // 16 POST %s/apps/{slug}/publish
+			$mgmt_base,        // 17 DELETE %s/apps/{slug}
+			$app_base,         // 18 GET %s/{slug}/counter
+			$app_base,         // 19 POST %s/{slug}/counter
+			$mgmt_base,        // 20 GET %s/apps/{slug}/evars
+			$mgmt_base,        // 21 POST %s/apps/{slug}/evars
+			$mgmt_base,        // 22 GET %s/apps/{slug}/evars/VAR_NAME
+			$mgmt_base,        // 23 DELETE %s/apps/{slug}/evars/VAR_NAME
+			$mgmt_base,        // 24 GET %s/global-evars
+			$mgmt_base,        // 25 POST %s/global-evars
+			$mgmt_base,        // 26 GET %s/global-evars/VAR_NAME
+			$mgmt_base         // 27 DELETE %s/global-evars/VAR_NAME
 		);
 	}
 
@@ -1155,6 +1339,375 @@ TXT;
 			'public_url' => trailingslashit( home_url( '/' . MRMURPHY_APPS_ROUTE_PREFIX . '/' . $post->post_name ) ),
 			'entry_file' => $entry_file,
 			'file_count' => count( $files ),
+		);
+	}
+
+	/* ------------------------------------------------------------------ */
+	/*  Permission Callbacks                                               */
+	/* ------------------------------------------------------------------ */
+
+	/**
+	 * Check if the current user has manage_options capability.
+	 *
+	 * @return bool
+	 */
+	public function check_manage_options() {
+		return is_user_logged_in() && current_user_can( 'manage_options' );
+	}
+
+	/**
+	 * Accept the mrmurphy_evars nonce for evar routes.
+	 *
+	 * Runs early (priority 5) so cookie auth doesn't reject the custom nonce.
+	 *
+	 * @param mixed $result Current auth status.
+	 * @return mixed
+	 */
+	public function check_evar_nonce( $result ) {
+		if ( null !== $result ) {
+			return $result;
+		}
+
+		$route_rest = $GLOBALS['wp']->query_vars['rest_route'] ?? '';
+		if ( '' === $route_rest ) {
+			$route_rest = isset( $_SERVER['REQUEST_URI'] ) ? parse_url( sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ), PHP_URL_PATH ) : '';
+			$route_rest = preg_replace( '#^.*/wp-json#', '', $route_rest );
+		}
+
+		if ( ! preg_match( '#^/mrmurphy-apps/v1/(apps/[^/]+/evars|global-evars)#', $route_rest ) ) {
+			return $result;
+		}
+
+		$nonce = isset( $_SERVER['HTTP_X_WP_NONCE'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_WP_NONCE'] ) ) : '';
+		if ( '' === $nonce ) {
+			return $result;
+		}
+
+		if ( 1 === wp_verify_nonce( $nonce, 'mrmurphy_evars' ) ) {
+			return true;
+		}
+
+		return $result;
+	}
+
+	/* ------------------------------------------------------------------ */
+	/*  Evar Validation                                                    */
+	/* ------------------------------------------------------------------ */
+
+	/**
+	 * Validate an evar name.
+	 *
+	 * @param string $name Evar name.
+	 * @return bool
+	 */
+	public static function validate_evar_name( $name ) {
+		if ( ! is_string( $name ) || '' === $name ) {
+			return false;
+		}
+		return (bool) preg_match( '/^[A-Z_][A-Z0-9_]{1,63}$/', $name );
+	}
+
+	/**
+	 * Validate callback for evar name.
+	 *
+	 * @param mixed $value Value to validate.
+	 * @return bool|WP_Error
+	 */
+	public function validate_evar_name_callback( $value ) {
+		if ( self::validate_evar_name( $value ) ) {
+			return true;
+		}
+		return new WP_Error(
+			'invalid_evar_name',
+			__( 'Invalid variable name. Must match: ^[A-Z_][A-Z0-9_]{1,63}$', 'mrmurphy-apps' )
+		);
+	}
+
+	/**
+	 * Validate callback for evar value.
+	 *
+	 * @param mixed $value Value to validate.
+	 * @return bool|WP_Error
+	 */
+	public function validate_evar_value_callback( $value ) {
+		if ( ! is_string( $value ) ) {
+			return new WP_Error( 'invalid_evar_value', __( 'Evar value must be a string.', 'mrmurphy-apps' ), array( 'status' => 400 ) );
+		}
+		if ( mb_strlen( $value, 'UTF-8' ) > 5000 ) {
+			return new WP_Error( 'evar_value_too_long', __( 'Evar value exceeds maximum length.', 'mrmurphy-apps' ), array( 'status' => 400 ) );
+		}
+		return true;
+	}
+
+	/* ------------------------------------------------------------------ */
+	/*  App Evar Handlers                                                  */
+	/* ------------------------------------------------------------------ */
+
+	/**
+	 * Get evars for an app post.
+	 *
+	 * @param int $post_id Post ID.
+	 * @return array
+	 */
+	private function get_app_evars( $post_id ) {
+		$all_meta = get_post_meta( $post_id );
+		$evars    = array();
+		$prefix   = '_mrmurphy_app_evar_';
+		foreach ( $all_meta as $key => $meta_values ) {
+			if ( 0 !== strpos( $key, $prefix ) ) {
+				continue;
+			}
+			$name = substr( $key, strlen( $prefix ) );
+			$data = $meta_values[0];
+			if ( is_array( $data ) ) {
+				$evars[ $name ] = $data;
+			}
+		}
+		return $evars;
+	}
+
+	/**
+	 * List app evars (masked values).
+	 *
+	 * @param WP_REST_Request $request Request object.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function list_app_evars( WP_REST_Request $request ) {
+		$slug = sanitize_title( $request->get_param( 'slug' ) );
+		$post = $this->get_app_post_by_slug( $slug );
+
+		if ( ! $post ) {
+			return new WP_Error( 'app_not_found', __( 'App not found.', 'mrmurphy-apps' ), array( 'status' => 404 ) );
+		}
+
+		if ( ! current_user_can( 'edit_post', $post->ID ) ) {
+			return new WP_Error( 'rest_forbidden', __( 'You do not have permission to view evars for this app.', 'mrmurphy-apps' ), array( 'status' => 403 ) );
+		}
+
+		$evars = $this->get_app_evars( $post->ID );
+		return new WP_REST_Response( $this->format_evars_list( $evars ), 200 );
+	}
+
+	/**
+	 * Create or update an app evar.
+	 *
+	 * @param WP_REST_Request $request Request object.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function upsert_app_evar( WP_REST_Request $request ) {
+		$slug  = sanitize_title( $request->get_param( 'slug' ) );
+		$name  = $request->get_param( 'name' );
+		$value = $request->get_param( 'value' );
+
+		$post = $this->get_app_post_by_slug( $slug );
+		if ( ! $post ) {
+			return new WP_Error( 'app_not_found', __( 'App not found.', 'mrmurphy-apps' ), array( 'status' => 404 ) );
+		}
+
+		if ( ! current_user_can( 'edit_post', $post->ID ) ) {
+			return new WP_Error( 'rest_forbidden', __( 'You do not have permission to edit this app.', 'mrmurphy-apps' ), array( 'status' => 403 ) );
+		}
+
+		$data = array(
+			'value'      => $value,
+			'updated_at' => gmdate( 'Y-m-d\TH:i:s\Z' ),
+		);
+		update_post_meta( $post->ID, '_mrmurphy_app_evar_' . $name, $data );
+
+		return new WP_REST_Response( $this->format_evar_single( array_merge( array( 'name' => $name ), $data ) ), 200 );
+	}
+
+	/**
+	 * Get a single app evar (unmasked).
+	 *
+	 * @param WP_REST_Request $request Request object.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function get_app_evar( WP_REST_Request $request ) {
+		$slug = sanitize_title( $request->get_param( 'slug' ) );
+		$name = $request->get_param( 'name' );
+
+		$post = $this->get_app_post_by_slug( $slug );
+		if ( ! $post ) {
+			return new WP_Error( 'app_not_found', __( 'App not found.', 'mrmurphy-apps' ), array( 'status' => 404 ) );
+		}
+
+		if ( ! current_user_can( 'edit_post', $post->ID ) ) {
+			return new WP_Error( 'rest_forbidden', __( 'You do not have permission to view evars for this app.', 'mrmurphy-apps' ), array( 'status' => 403 ) );
+		}
+
+		$data = get_post_meta( $post->ID, '_mrmurphy_app_evar_' . $name, true );
+		if ( ! is_array( $data ) ) {
+			return new WP_Error( 'evar_not_found', __( 'Evar not found.', 'mrmurphy-apps' ), array( 'status' => 404 ) );
+		}
+
+		return new WP_REST_Response( $this->format_evar_single( array_merge( array( 'name' => $name ), $data ) ), 200 );
+	}
+
+	/**
+	 * Delete an app evar.
+	 *
+	 * @param WP_REST_Request $request Request object.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function delete_app_evar( WP_REST_Request $request ) {
+		$slug = sanitize_title( $request->get_param( 'slug' ) );
+		$name = $request->get_param( 'name' );
+
+		$post = $this->get_app_post_by_slug( $slug );
+		if ( ! $post ) {
+			return new WP_Error( 'app_not_found', __( 'App not found.', 'mrmurphy-apps' ), array( 'status' => 404 ) );
+		}
+
+		if ( ! current_user_can( 'edit_post', $post->ID ) ) {
+			return new WP_Error( 'rest_forbidden', __( 'You do not have permission to edit this app.', 'mrmurphy-apps' ), array( 'status' => 403 ) );
+		}
+
+		$data = get_post_meta( $post->ID, '_mrmurphy_app_evar_' . $name, true );
+		if ( ! is_array( $data ) ) {
+			return new WP_Error( 'evar_not_found', __( 'Evar not found.', 'mrmurphy-apps' ), array( 'status' => 404 ) );
+		}
+
+		delete_post_meta( $post->ID, '_mrmurphy_app_evar_' . $name );
+
+		return new WP_REST_Response(
+			array( 'message' => __( 'Evar deleted.', 'mrmurphy-apps' ) ),
+			200
+		);
+	}
+
+	/* ------------------------------------------------------------------ */
+	/*  Global Evar Handlers                                               */
+	/* ------------------------------------------------------------------ */
+
+	/**
+	 * Get global evars.
+	 *
+	 * @return array
+	 */
+	private function get_global_evars() {
+		global $wpdb;
+		$rows = $wpdb->get_col(
+			$wpdb->prepare(
+				"SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s",
+				$wpdb->esc_like( '_mrmurphy_global_evar_' ) . '%'
+			)
+		);
+		$evars = array();
+		$prefix_len = strlen( '_mrmurphy_global_evar_' );
+		foreach ( $rows as $option_name ) {
+			$name = substr( $option_name, $prefix_len );
+			$data = get_option( $option_name, null );
+			if ( is_array( $data ) ) {
+				$evars[ $name ] = $data;
+			}
+		}
+		return $evars;
+	}
+
+	/**
+	 * List global evars (masked values).
+	 *
+	 * @param WP_REST_Request $request Request object.
+	 * @return WP_REST_Response
+	 */
+	public function list_global_evars( WP_REST_Request $request ) {
+		$evars = $this->get_global_evars();
+		return new WP_REST_Response( $this->format_evars_list( $evars ), 200 );
+	}
+
+	/**
+	 * Create or update a global evar.
+	 *
+	 * @param WP_REST_Request $request Request object.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function upsert_global_evar( WP_REST_Request $request ) {
+		$name  = $request->get_param( 'name' );
+		$value = $request->get_param( 'value' );
+
+		$data = array(
+			'value'      => $value,
+			'updated_at' => gmdate( 'Y-m-d\TH:i:s\Z' ),
+		);
+		update_option( '_mrmurphy_global_evar_' . $name, $data, false );
+
+		return new WP_REST_Response( $this->format_evar_single( array_merge( array( 'name' => $name ), $data ) ), 200 );
+	}
+
+	/**
+	 * Get a single global evar (unmasked).
+	 *
+	 * @param WP_REST_Request $request Request object.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function get_global_evar( WP_REST_Request $request ) {
+		$name = $request->get_param( 'name' );
+		$data = get_option( '_mrmurphy_global_evar_' . $name, null );
+
+		if ( ! is_array( $data ) ) {
+			return new WP_Error( 'evar_not_found', __( 'Evar not found.', 'mrmurphy-apps' ), array( 'status' => 404 ) );
+		}
+
+		return new WP_REST_Response( $this->format_evar_single( array_merge( array( 'name' => $name ), $data ) ), 200 );
+	}
+
+	/**
+	 * Delete a global evar.
+	 *
+	 * @param WP_REST_Request $request Request object.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function delete_global_evar( WP_REST_Request $request ) {
+		$name = $request->get_param( 'name' );
+
+		$data = get_option( '_mrmurphy_global_evar_' . $name, null );
+		if ( ! is_array( $data ) ) {
+			return new WP_Error( 'evar_not_found', __( 'Evar not found.', 'mrmurphy-apps' ), array( 'status' => 404 ) );
+		}
+
+		delete_option( '_mrmurphy_global_evar_' . $name );
+
+		return new WP_REST_Response(
+			array( 'message' => __( 'Evar deleted.', 'mrmurphy-apps' ) ),
+			200
+		);
+	}
+
+	/* ------------------------------------------------------------------ */
+	/*  Evar Format Helpers                                                */
+	/* ------------------------------------------------------------------ */
+
+	/**
+	 * Format evars for list response (values masked).
+	 *
+	 * @param array $evars Evars array.
+	 * @return array
+	 */
+	private function format_evars_list( $evars ) {
+		$list = array();
+		foreach ( $evars as $name => $evar ) {
+			$list[] = array(
+				'name'         => $name,
+				'masked_value' => '••••••••',
+				'updated_at'   => $evar['updated_at'] ?? '',
+			);
+		}
+		ksort( $list );
+		return array( 'evars' => array_values( $list ) );
+	}
+
+	/**
+	 * Format a single evar response (unmasked).
+	 *
+	 * @param array $evar Evar data.
+	 * @return array
+	 */
+	private function format_evar_single( $evar ) {
+		return array(
+			'name'       => $evar['name'],
+			'value'      => $evar['value'],
+			'updated_at' => $evar['updated_at'] ?? '',
 		);
 	}
 }

@@ -106,6 +106,7 @@ final class MRMurphy_Apps_Plugin {
 			array(
 				'read'        => true,
 				$cap          => true,
+				'edit_posts'  => true,
 				'level_0'     => true,
 			)
 		);

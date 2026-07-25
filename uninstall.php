@@ -27,7 +27,28 @@ $apps = get_posts(
 );
 
 foreach ( $apps as $app_id ) {
-	wp_delete_post( (int) $app_id, true );
+	$app_id = (int) $app_id;
+
+	// Clean up app-scoped evar meta keys.
+	$all_meta = get_post_meta( $app_id );
+	foreach ( $all_meta as $meta_key => $meta_values ) {
+		if ( 0 === strpos( $meta_key, '_mrmurphy_app_evar_' ) ) {
+			delete_post_meta( $app_id, $meta_key );
+		}
+	}
+
+	wp_delete_post( $app_id, true );
+}
+
+// Clean up global evar options.
+$rows = $wpdb->get_col(
+	$wpdb->prepare(
+		"SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s",
+		$wpdb->esc_like( '_mrmurphy_global_evar_' ) . '%'
+	)
+);
+foreach ( $rows as $option_name ) {
+	delete_option( $option_name );
 }
 
 $storage = new MRMurphy_Apps_Storage();

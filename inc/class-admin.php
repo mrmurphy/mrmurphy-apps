@@ -292,6 +292,521 @@ WP_APP_API="<?php echo esc_url( home_url( '/wp-json/apps/v1/{slug}' ) ); ?>"
 # curl -u "$WP_USER:$WP_APP_PASSWORD" "$WP_MGMT_API/apps/my-app/upload" \
 #   -H "Content-Type: application/json" \
 #   -d '{"zip_base64": "<base64-zip>"}'</pre>
+
+			<hr>
+
+			<h2 style="margin-top:2em"><?php esc_html_e( 'Environment Variables', 'mrmurphy-apps' ); ?></h2>
+
+			<p><?php esc_html_e( 'Store environment variables for use by apps and agents. Values are masked in list views for security.', 'mrmurphy-apps' ); ?></p>
+
+			<h3><?php esc_html_e( 'Global Variables', 'mrmurphy-apps' ); ?></h3>
+			<p class="description"><?php esc_html_e( 'Available to all apps.', 'mrmurphy-apps' ); ?></p>
+
+			<table id="mrmurphy-global-evars" class="widefat striped" style="max-width:700px">
+				<thead>
+					<tr>
+						<th><?php esc_html_e( 'Name', 'mrmurphy-apps' ); ?></th>
+						<th><?php esc_html_e( 'Value', 'mrmurphy-apps' ); ?></th>
+						<th style="width:120px"><?php esc_html_e( 'Action', 'mrmurphy-apps' ); ?></th>
+					</tr>
+				</thead>
+				<tbody>
+					<?php
+					global $wpdb;
+					$global_evars = array();
+					$rows = $wpdb->get_col(
+						$wpdb->prepare(
+							"SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s",
+							$wpdb->esc_like( '_mrmurphy_global_evar_' ) . '%'
+						)
+					);
+					$prefix_len = strlen( '_mrmurphy_global_evar_' );
+					foreach ( $rows as $option_name ) {
+						$name = substr( $option_name, $prefix_len );
+						$data = get_option( $option_name, null );
+						if ( is_array( $data ) ) {
+							$global_evars[ $name ] = $data;
+						}
+					}
+					if ( empty( $global_evars ) ) {
+						echo '<tr class="mrmurphy-no-evars"><td colspan="3">' . esc_html__( 'No global variables yet.', 'mrmurphy-apps' ) . '</td></tr>';
+					} else {
+						foreach ( $global_evars as $name => $evar ) {
+							?>
+							<tr data-evar-name="<?php echo esc_attr( $name ); ?>">
+								<td><code><?php echo esc_html( $name ); ?></code></td>
+								<td><span class="mrmurphy-masked-value">••••••••</span></td>
+								<td>
+									<button type="button" class="button button-small mrmurphy-edit-evar" data-evar-name="<?php echo esc_attr( $name ); ?>"><?php esc_html_e( 'Edit', 'mrmurphy-apps' ); ?></button>
+									<button type="button" class="button button-small mrmurphy-delete-evar" data-evar-name="<?php echo esc_attr( $name ); ?>"><?php esc_html_e( 'Delete', 'mrmurphy-apps' ); ?></button>
+								</td>
+							</tr>
+							<?php
+						}
+					}
+					?>
+				</tbody>
+			</table>
+
+			<p>
+				<button type="button" class="button" id="mrmurphy-add-global-evar"><?php esc_html_e( '+ Add Global Variable', 'mrmurphy-apps' ); ?></button>
+			</p>
+
+			<h3><?php esc_html_e( 'App Variables', 'mrmurphy-apps' ); ?></h3>
+			<p class="description"><?php esc_html_e( 'Select an app to manage its environment variables.', 'mrmurphy-apps' ); ?></p>
+
+			<p>
+				<select id="mrmurphy-app-select" style="min-width:250px">
+					<option value=""><?php esc_html_e( '— Select an app —', 'mrmurphy-apps' ); ?></option>
+					<?php
+					$apps = get_posts(
+						array(
+							'post_type'      => 'mrmurphy_app',
+							'post_status'    => 'any',
+							'posts_per_page' => -1,
+							'orderby'        => 'title',
+							'order'          => 'ASC',
+						)
+					);
+					foreach ( $apps as $app ) {
+						printf(
+							'<option value="%s">%s</option>',
+							esc_attr( $app->post_name ),
+							esc_html( $app->post_title )
+						);
+					}
+					?>
+				</select>
+			</p>
+
+			<div id="mrmurphy-app-evars-container" style="display:none">
+				<table id="mrmurphy-app-evars" class="widefat striped" style="max-width:700px">
+					<thead>
+						<tr>
+							<th><?php esc_html_e( 'Name', 'mrmurphy-apps' ); ?></th>
+							<th><?php esc_html_e( 'Value', 'mrmurphy-apps' ); ?></th>
+							<th style="width:120px"><?php esc_html_e( 'Action', 'mrmurphy-apps' ); ?></th>
+						</tr>
+					</thead>
+					<tbody></tbody>
+				</table>
+				<p>
+					<button type="button" class="button" id="mrmurphy-add-app-evar"><?php esc_html_e( '+ Add App Variable', 'mrmurphy-apps' ); ?></button>
+				</p>
+			</div>
+
+			<p id="mrmurphy-app-evars-message"><?php esc_html_e( 'Select an app above to view and manage its environment variables.', 'mrmurphy-apps' ); ?></p>
+
+			<div id="mrmurphy-evar-form-container" style="display:none"></div>
+
+			<style>
+				.mrmurphy-evar-form{background:#f0f0f1;padding:1em;margin:0.5em 0;border-radius:4px}
+				.mrmurphy-evar-form .form-table{margin:0;max-width:500px}
+				.mrmurphy-evar-form .form-table th{width:120px}
+				.mrmurphy-evar-form .mrmurphy-evar-name-input{font-family:monospace}
+				.mrmurphy-evar-form .mrmurphy-evar-value-row{display:flex;gap:4px;align-items:center}
+				.mrmurphy-evar-form .mrmurphy-evar-value-row input{flex:1}
+				.mrmurphy-evar-error{color:#d63638;margin-left:1em;display:none}
+				.mrmurphy-evar-form .form-table td{padding:4px 10px}
+				.mrmurphy-evar-form .form-table th{padding:4px 10px 4px 0}
+				#mrmurphy-evar-form-container{margin-bottom:1em}
+			</style>
+
+			<script>
+			(function(){
+				var apiRoot = <?php echo wp_json_encode( rest_url( 'mrmurphy-apps/v1' ) ); ?>;
+				var nonce = <?php echo wp_json_encode( wp_create_nonce( 'mrmurphy_evars' ) ); ?>;
+				var currentAppSlug = '';
+
+				function apiFetch( method, path, body ) {
+					var opts = {
+						method: method,
+						headers: { 'X-WP-Nonce': nonce, 'Content-Type': 'application/json' }
+					};
+					if ( body ) {
+						opts.body = JSON.stringify( body );
+					}
+					return fetch( apiRoot + path, opts ).then( function( r ) {
+						if ( ! r.ok ) {
+							return r.json().then( function( e ) { throw e; } );
+						}
+						return r.json();
+					} );
+				}
+
+				function buildEvarForm( opts ) {
+					var editing = !! opts.existingName;
+					var container = document.getElementById( 'mrmurphy-evar-form-container' );
+					container.innerHTML = '';
+					container.style.display = '';
+
+					var form = document.createElement( 'div' );
+					form.className = 'mrmurphy-evar-form';
+
+					var table = document.createElement( 'table' );
+					table.className = 'form-table';
+
+					/* Name row */
+					var nameRow = table.insertRow();
+					var nameTh = document.createElement( 'th' );
+					nameTh.scope = 'row';
+					var nameLabel = document.createElement( 'label' );
+					nameLabel.textContent = 'Variable Name';
+					nameTh.appendChild( nameLabel );
+					nameRow.appendChild( nameTh );
+					var nameTd = nameRow.insertCell();
+					var nameInput = document.createElement( 'input' );
+					nameInput.type = 'text';
+					nameInput.className = 'regular-text mrmurphy-evar-name-input';
+					nameInput.pattern = '[A-Z_][A-Z0-9_]*';
+					nameInput.title = 'Uppercase letters, numbers, and underscores only. Must start with a letter or underscore.';
+					nameInput.autocomplete = 'off';
+					nameInput.placeholder = 'MY_VARIABLE';
+					if ( editing ) {
+						nameInput.value = opts.existingName;
+						nameInput.readOnly = true;
+					}
+					nameTd.appendChild( nameInput );
+					var nameHint = document.createElement( 'p' );
+					nameHint.className = 'description';
+					nameHint.textContent = 'Uppercase letters, numbers, underscores. 2-64 chars.';
+					nameTd.appendChild( nameHint );
+
+					/* Value row */
+					var valueRow = table.insertRow();
+					var valueTh = document.createElement( 'th' );
+					valueTh.scope = 'row';
+					var valueLabel = document.createElement( 'label' );
+					valueLabel.textContent = 'Value';
+					valueTh.appendChild( valueLabel );
+					valueRow.appendChild( valueTh );
+					var valueTd = valueRow.insertCell();
+					var valueWrap = document.createElement( 'div' );
+					valueWrap.className = 'mrmurphy-evar-value-row';
+					var valueInput = document.createElement( 'input' );
+					valueInput.type = 'password';
+					valueInput.className = 'regular-text mrmurphy-evar-value-input';
+					valueInput.autocomplete = 'new-password';
+					if ( editing && opts.existingValue ) {
+						valueInput.value = opts.existingValue;
+					}
+					valueWrap.appendChild( valueInput );
+					var revealBtn = document.createElement( 'button' );
+					revealBtn.type = 'button';
+					revealBtn.className = 'button button-small';
+					revealBtn.textContent = 'Show';
+					revealBtn.addEventListener( 'click', function() {
+						if ( valueInput.type === 'password' ) {
+							valueInput.type = 'text';
+							revealBtn.textContent = 'Hide';
+						} else {
+							valueInput.type = 'password';
+							revealBtn.textContent = 'Show';
+						}
+					} );
+					valueWrap.appendChild( revealBtn );
+					valueTd.appendChild( valueWrap );
+
+					/* Buttons row */
+					var btnRow = table.insertRow();
+					var btnTd = btnRow.insertCell();
+					btnTd.colSpan = 2;
+					btnTd.style.paddingTop = '0.5em';
+
+					var saveBtn = document.createElement( 'button' );
+					saveBtn.type = 'button';
+					saveBtn.className = 'button button-primary mrmurphy-evar-save';
+					saveBtn.textContent = 'Save';
+					btnTd.appendChild( saveBtn );
+
+					btnTd.appendChild( document.createTextNode( ' ' ) );
+
+					var cancelBtn = document.createElement( 'button' );
+					cancelBtn.type = 'button';
+					cancelBtn.className = 'button mrmurphy-evar-cancel';
+					cancelBtn.textContent = 'Cancel';
+					btnTd.appendChild( cancelBtn );
+
+					var errSpan = document.createElement( 'span' );
+					errSpan.className = 'mrmurphy-evar-error';
+					btnTd.appendChild( errSpan );
+
+					form.appendChild( table );
+					container.appendChild( form );
+
+					if ( ! editing ) {
+						nameInput.focus();
+					} else {
+						valueInput.focus();
+					}
+
+					return {
+						form: form,
+						container: container,
+						nameInput: nameInput,
+						valueInput: valueInput,
+						saveBtn: saveBtn,
+						cancelBtn: cancelBtn,
+						errSpan: errSpan
+					};
+				}
+
+				function refreshGlobalEvars() {
+					return apiFetch( 'GET', '/global-evars' ).then( function( data ) {
+						var tbody = document.querySelector( '#mrmurphy-global-evars tbody' );
+						tbody.innerHTML = '';
+						if ( ! data.evars || data.evars.length === 0 ) {
+							var tr = document.createElement( 'tr' );
+							tr.className = 'mrmurphy-no-evars';
+							var td = document.createElement( 'td' );
+							td.colSpan = 3;
+							td.textContent = 'No global variables yet.';
+							tr.appendChild( td );
+							tbody.appendChild( tr );
+							return;
+						}
+						data.evars.forEach( function( evar ) {
+							var tr = document.createElement( 'tr' );
+							tr.setAttribute( 'data-evar-name', evar.name );
+							var nameTd = document.createElement( 'td' );
+							var code = document.createElement( 'code' );
+							code.textContent = evar.name;
+							nameTd.appendChild( code );
+							tr.appendChild( nameTd );
+							var valTd = document.createElement( 'td' );
+							var span = document.createElement( 'span' );
+							span.className = 'mrmurphy-masked-value';
+							span.textContent = '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022';
+							valTd.appendChild( span );
+							tr.appendChild( valTd );
+							var actTd = document.createElement( 'td' );
+							var editBtn = document.createElement( 'button' );
+							editBtn.type = 'button';
+							editBtn.className = 'button button-small mrmurphy-edit-evar';
+							editBtn.textContent = 'Edit';
+							editBtn.setAttribute( 'data-evar-name', evar.name );
+							actTd.appendChild( editBtn );
+							actTd.appendChild( document.createTextNode( ' ' ) );
+							var delBtn = document.createElement( 'button' );
+							delBtn.type = 'button';
+							delBtn.className = 'button button-small mrmurphy-delete-evar';
+							delBtn.textContent = 'Delete';
+							delBtn.setAttribute( 'data-evar-name', evar.name );
+							actTd.appendChild( delBtn );
+							tr.appendChild( actTd );
+							tbody.appendChild( tr );
+						} );
+					} );
+				}
+
+				function refreshAppEvars( slug ) {
+					return apiFetch( 'GET', '/apps/' + slug + '/evars' ).then( function( data ) {
+						var tbody = document.querySelector( '#mrmurphy-app-evars tbody' );
+						tbody.innerHTML = '';
+						if ( ! data.evars || data.evars.length === 0 ) {
+							var tr = document.createElement( 'tr' );
+							tr.className = 'mrmurphy-no-evars';
+							var td = document.createElement( 'td' );
+							td.colSpan = 3;
+							td.textContent = 'No app variables yet.';
+							tr.appendChild( td );
+							tbody.appendChild( tr );
+							return;
+						}
+						data.evars.forEach( function( evar ) {
+							var tr = document.createElement( 'tr' );
+							tr.setAttribute( 'data-evar-name', evar.name );
+							var nameTd = document.createElement( 'td' );
+							var code = document.createElement( 'code' );
+							code.textContent = evar.name;
+							nameTd.appendChild( code );
+							tr.appendChild( nameTd );
+							var valTd = document.createElement( 'td' );
+							var span = document.createElement( 'span' );
+							span.className = 'mrmurphy-masked-value';
+							span.textContent = '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022';
+							valTd.appendChild( span );
+							tr.appendChild( valTd );
+							var actTd = document.createElement( 'td' );
+							var editBtn = document.createElement( 'button' );
+							editBtn.type = 'button';
+							editBtn.className = 'button button-small mrmurphy-edit-evar';
+							editBtn.textContent = 'Edit';
+							editBtn.setAttribute( 'data-evar-name', evar.name );
+							actTd.appendChild( editBtn );
+							actTd.appendChild( document.createTextNode( ' ' ) );
+							var delBtn = document.createElement( 'button' );
+							delBtn.type = 'button';
+							delBtn.className = 'button button-small mrmurphy-delete-evar';
+							delBtn.textContent = 'Delete';
+							delBtn.setAttribute( 'data-evar-name', evar.name );
+							actTd.appendChild( delBtn );
+							tr.appendChild( actTd );
+							tbody.appendChild( tr );
+						} );
+					} );
+				}
+
+				function getEvarValue( scope, name ) {
+					var path;
+					if ( scope === 'global' ) {
+						path = '/global-evars/' + encodeURIComponent( name );
+					} else {
+						path = '/apps/' + currentAppSlug + '/evars/' + encodeURIComponent( name );
+					}
+					return apiFetch( 'GET', path ).then( function( data ) { return data; } );
+				}
+
+				function upsertEvar( scope, name, value ) {
+					var path, body;
+					if ( scope === 'global' ) {
+						path = '/global-evars';
+					} else {
+						path = '/apps/' + currentAppSlug + '/evars';
+					}
+					body = { name: name, value: value };
+					return apiFetch( 'POST', path, body );
+				}
+
+				function deleteEvar( scope, name ) {
+					var path;
+					if ( scope === 'global' ) {
+						path = '/global-evars/' + encodeURIComponent( name );
+					} else {
+						path = '/apps/' + currentAppSlug + '/evars/' + encodeURIComponent( name );
+					}
+					return apiFetch( 'DELETE', path );
+				}
+
+				function getAppEvarNames( slug, cb ) {
+					return apiFetch( 'GET', '/apps/' + slug + '/evars' );
+				}
+
+				function showForm( scope, existingName, existingValue ) {
+					var formUI = buildEvarForm( { existingName: existingName, existingValue: existingValue } );
+
+					formUI.saveBtn.addEventListener( 'click', function() {
+						var name = formUI.nameInput.value.trim();
+						var value = formUI.valueInput.value;
+						formUI.errSpan.style.display = 'none';
+						formUI.errSpan.textContent = '';
+
+						if ( ! name ) {
+							formUI.errSpan.textContent = 'Name is required.';
+							formUI.errSpan.style.display = '';
+							formUI.nameInput.focus();
+							return;
+						}
+						if ( ! /^[A-Z_][A-Z0-9_]{1,63}$/.test( name ) ) {
+							formUI.errSpan.textContent = 'Name must match: uppercase letters, numbers, underscores. 2-64 chars.';
+							formUI.errSpan.style.display = '';
+							formUI.nameInput.focus();
+							return;
+						}
+						if ( ! value ) {
+							formUI.errSpan.textContent = 'Value is required.';
+							formUI.errSpan.style.display = '';
+							formUI.valueInput.focus();
+							return;
+						}
+						formUI.saveBtn.disabled = true;
+						formUI.saveBtn.textContent = 'Saving...';
+
+						upsertEvar( scope, name, value ).then( function() {
+							formUI.container.style.display = 'none';
+							formUI.container.innerHTML = '';
+							if ( scope === 'global' ) {
+								return refreshGlobalEvars();
+							} else {
+								return refreshAppEvars( currentAppSlug );
+							}
+						} ).catch( function( err ) {
+							var msg = err.message || 'An error occurred.';
+							if ( err.code === 'invalid_evar_name' || err.code === 'invalid_evar_value' || err.code === 'evar_value_too_long' ) {
+								msg = 'Invalid value. Check name format (uppercase, 2-64 chars) and value length (max 5000 chars).';
+							}
+							formUI.errSpan.textContent = msg;
+							formUI.errSpan.style.display = '';
+							formUI.saveBtn.disabled = false;
+							formUI.saveBtn.textContent = 'Save';
+						} );
+					} );
+
+					formUI.cancelBtn.addEventListener( 'click', function() {
+						formUI.container.style.display = 'none';
+						formUI.container.innerHTML = '';
+					} );
+				}
+
+				function confirmAndDelete( scope, name ) {
+					if ( ! window.confirm( 'Delete evar "' + name + '"? This cannot be undone.' ) ) {
+						return;
+					}
+					deleteEvar( scope, name ).then( function() {
+						if ( scope === 'global' ) {
+							return refreshGlobalEvars();
+						} else {
+							return refreshAppEvars( currentAppSlug );
+						}
+					} ).catch( function() {
+						window.alert( 'Failed to delete evar.' );
+					} );
+				}
+
+				/* Event delegation for table actions */
+				document.addEventListener( 'click', function( e ) {
+					var editBtn = e.target.closest( '.mrmurphy-edit-evar' );
+					if ( editBtn ) {
+						var name = editBtn.getAttribute( 'data-evar-name' );
+						var scope = editBtn.closest( '#mrmurphy-global-evars' ) ? 'global' : 'app';
+						getEvarValue( scope, name ).then( function( data ) {
+							showForm( scope, data.name, data.value );
+						} ).catch( function() {
+							window.alert( 'Failed to fetch evar value.' );
+						} );
+						return;
+					}
+
+					var delBtn = e.target.closest( '.mrmurphy-delete-evar' );
+					if ( delBtn ) {
+						var name = delBtn.getAttribute( 'data-evar-name' );
+						var scope = delBtn.closest( '#mrmurphy-global-evars' ) ? 'global' : 'app';
+						confirmAndDelete( scope, name );
+						return;
+					}
+				} );
+
+				/* Add global evar */
+				document.getElementById( 'mrmurphy-add-global-evar' ).addEventListener( 'click', function() {
+					showForm( 'global', null, null );
+				} );
+
+				/* Add app evar */
+				document.getElementById( 'mrmurphy-add-app-evar' ).addEventListener( 'click', function() {
+					if ( ! currentAppSlug ) return;
+					showForm( 'app', null, null );
+				} );
+
+				/* App dropdown */
+				document.getElementById( 'mrmurphy-app-select' ).addEventListener( 'change', function() {
+					var slug = this.value;
+					var container = document.getElementById( 'mrmurphy-app-evars-container' );
+					var msg = document.getElementById( 'mrmurphy-app-evars-message' );
+
+					if ( ! slug ) {
+						container.style.display = 'none';
+						msg.style.display = '';
+						currentAppSlug = '';
+						return;
+					}
+
+					currentAppSlug = slug;
+					msg.style.display = 'none';
+					container.style.display = '';
+					refreshAppEvars( slug );
+				} );
+			})();
+			</script>
 		</div>
 		<?php
 	}
