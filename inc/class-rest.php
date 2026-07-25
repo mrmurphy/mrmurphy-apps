@@ -535,7 +535,7 @@ class MRMurphy_Apps_REST {
 	 * @return bool
 	 */
 	public function check_permissions() {
-		return is_user_logged_in() && ( current_user_can( 'manage_options' ) || current_user_can( 'manage_mrmurphy_apps' ) );
+		return is_user_logged_in() && ( current_user_can( 'manage_options' ) || current_user_can( 'manage_mrmurphy_apps' ) || current_user_can( 'manage_mrmurphy_evars' ) );
 	}
 
 	/**
@@ -1352,7 +1352,7 @@ TXT;
 	 * @return bool
 	 */
 	public function check_manage_options() {
-		return is_user_logged_in() && current_user_can( 'manage_options' );
+		return is_user_logged_in() && ( current_user_can( 'manage_options' ) || current_user_can( 'manage_mrmurphy_evars' ) );
 	}
 
 	/**

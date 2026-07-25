@@ -97,6 +97,7 @@ final class MRMurphy_Apps_Plugin {
 		$admin = get_role( 'administrator' );
 		if ( $admin instanceof WP_Role ) {
 			$admin->add_cap( $cap, true );
+			$admin->add_cap( 'manage_mrmurphy_evars', true );
 		}
 
 		// Add dedicated agent role.
@@ -104,10 +105,11 @@ final class MRMurphy_Apps_Plugin {
 			'mrmurphy_agent',
 			__( 'MrMurphy Agent', 'mrmurphy-apps' ),
 			array(
-				'read'        => true,
-				$cap          => true,
-				'edit_posts'  => true,
-				'level_0'     => true,
+				'read'                  => true,
+				$cap                    => true,
+				'manage_mrmurphy_evars' => true,
+				'edit_posts'            => true,
+				'level_0'               => true,
 			)
 		);
 	}
