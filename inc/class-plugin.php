@@ -67,6 +67,19 @@ final class MRMurphy_Apps_Plugin {
 		}
 
 		$this->rest = new MRMurphy_Apps_REST();
+
+		add_action( 'init', array( __CLASS__, 'maybe_update_capabilities' ) );
+	}
+
+	/**
+	 * Ensure capabilities are up to date without requiring re-activation.
+	 */
+	public static function maybe_update_capabilities() {
+		$stored = get_option( 'mrmurphy_apps_caps_version', '' );
+		if ( $stored !== MRMURPHY_APPS_VERSION ) {
+			self::add_capabilities();
+			update_option( 'mrmurphy_apps_caps_version', MRMURPHY_APPS_VERSION );
+		}
 	}
 
 	/**
@@ -105,13 +118,20 @@ final class MRMurphy_Apps_Plugin {
 			'mrmurphy_agent',
 			__( 'MrMurphy Agent', 'mrmurphy-apps' ),
 			array(
-				'read'                  => true,
-				$cap                    => true,
-				'manage_mrmurphy_evars' => true,
-				'edit_posts'            => true,
-				'level_0'               => true,
+				'read'        => true,
+				$cap          => true,
+				'level_0'     => true,
 			)
 		);
+
+		// Ensure caps are present on the agent role.
+		// add_role() is a no-op if the role already exists, so retroactive
+		// add_cap() calls are needed for caps added in plugin updates.
+		$agent = get_role( 'mrmurphy_agent' );
+		if ( $agent instanceof WP_Role ) {
+			$agent->add_cap( 'manage_mrmurphy_evars', true );
+			$agent->add_cap( 'edit_posts', true );
+		}
 	}
 
 	/**
