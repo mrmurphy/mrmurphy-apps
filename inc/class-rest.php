@@ -1356,6 +1356,17 @@ TXT;
 	}
 
 	/**
+	 * Check if the current user can manage evars.
+	 *
+	 * Mirrors the route-level permission check for defense-in-depth.
+	 *
+	 * @return bool
+	 */
+	private function current_user_can_manage_evars() {
+		return is_user_logged_in() && ( current_user_can( 'manage_options' ) || current_user_can( 'manage_mrmurphy_apps' ) || current_user_can( 'manage_mrmurphy_evars' ) );
+	}
+
+	/**
 	 * Accept the mrmurphy_evars nonce for evar routes.
 	 *
 	 * Runs early (priority 5) so cookie auth doesn't reject the custom nonce.
@@ -1480,7 +1491,7 @@ TXT;
 			return new WP_Error( 'app_not_found', __( 'App not found.', 'mrmurphy-apps' ), array( 'status' => 404 ) );
 		}
 
-		if ( ! current_user_can( 'edit_post', $post->ID ) ) {
+		if ( ! $this->current_user_can_manage_evars() ) {
 			return new WP_Error( 'rest_forbidden', __( 'You do not have permission to view evars for this app.', 'mrmurphy-apps' ), array( 'status' => 403 ) );
 		}
 
@@ -1504,7 +1515,7 @@ TXT;
 			return new WP_Error( 'app_not_found', __( 'App not found.', 'mrmurphy-apps' ), array( 'status' => 404 ) );
 		}
 
-		if ( ! current_user_can( 'edit_post', $post->ID ) ) {
+		if ( ! $this->current_user_can_manage_evars() ) {
 			return new WP_Error( 'rest_forbidden', __( 'You do not have permission to edit this app.', 'mrmurphy-apps' ), array( 'status' => 403 ) );
 		}
 
@@ -1532,7 +1543,7 @@ TXT;
 			return new WP_Error( 'app_not_found', __( 'App not found.', 'mrmurphy-apps' ), array( 'status' => 404 ) );
 		}
 
-		if ( ! current_user_can( 'edit_post', $post->ID ) ) {
+		if ( ! $this->current_user_can_manage_evars() ) {
 			return new WP_Error( 'rest_forbidden', __( 'You do not have permission to view evars for this app.', 'mrmurphy-apps' ), array( 'status' => 403 ) );
 		}
 
@@ -1559,7 +1570,7 @@ TXT;
 			return new WP_Error( 'app_not_found', __( 'App not found.', 'mrmurphy-apps' ), array( 'status' => 404 ) );
 		}
 
-		if ( ! current_user_can( 'edit_post', $post->ID ) ) {
+		if ( ! $this->current_user_can_manage_evars() ) {
 			return new WP_Error( 'rest_forbidden', __( 'You do not have permission to edit this app.', 'mrmurphy-apps' ), array( 'status' => 403 ) );
 		}
 
