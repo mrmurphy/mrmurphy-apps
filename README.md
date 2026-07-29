@@ -1,50 +1,55 @@
 # MrMurphy Apps
 
-WordPress plugin for hosting static apps at `/apps/{slug}/`.
+Manage static apps hosted on WordPress via the MrMurphy Apps REST API.
 
-## Setup
-
-Symlink into your WordPress site:
+## Install
 
 ```bash
-ln -s /Users/murphy/projects/mrmurphy-apps /path/to/site/wp-content/plugins/mrmurphy-apps
+npx skills add mrmurphy/mrmurphy-apps --directory skills/mrmurphy-apps
 ```
 
-Activate with WP-CLI:
+## What it does
+
+- Create, upload, publish, and delete apps
+- Manage environment variables (global and app-scoped)
+- Build server-side PHP routes for apps
+- Access evars from server-side code
+
+## Prerequisites
+
+- [MrMurphy Apps](https://github.com/mrmurphy/mrmurphy-apps) plugin installed on the target WordPress site
+- An "Agent" user with `mrmurphy_agent` role (or admin user) with Application Password
+
+## Quick Start
 
 ```bash
-studio wp plugin activate mrmurphy-apps
+# Set credentials as evars
+curl -X POST {MRMURPHY_APPS_URL}/wp-json/mrmurphy-apps/v1/global-evars \
+  -u "${MRMURPHY_APPS_USERNAME}:${MRMURPHY_APPS_PASSWORD}" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"MRMURPHY_APPS_URL","value":"'"$MRMURPHY_APPS_URL"'"}'
+
+# Create an app
+curl -X POST {MRMURPHY_APPS_URL}/wp-json/mrmurphy-apps/v1/apps \
+  -u "${MRMURPHY_APPS_USERNAME}:${MRMURPHY_APPS_PASSWORD}" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"My App","slug":"my-app","zip_base64":"<base64>"}'
+
+# Publish
+curl -X POST {MRMURPHY_APPS_URL}/wp-json/mrmurphy-apps/v1/apps/my-app/publish \
+  -u "${MRMURPHY_APPS_USERNAME}:${MRMURPHY_APPS_PASSWORD}" \
+  -H "Content-Type: application/json" \
+  -d '{"status":"publish"}'
 ```
 
-## Usage
+## API Reference
 
-1. In wp-admin, go to **Apps → Add New**
-2. Set the title and slug (`foo` → `/apps/foo/`)
-3. Upload a zip of static files
-4. Publish and open the public URL
+See the skill for full API documentation including:
+- Management API endpoints
+- Server-side code patterns
+- Environment variable access
+- App Data API usage
 
-Uploaded files are stored in `wp-content/uploads/mrmurphy-apps/{slug}/`.
+## License
 
-HTML responses get a `<base href="/apps/{slug}/">` tag injected when one is not already present.
-
-Visit stats (HTML document views) appear in the app edit screen sidebar.
-
-## Build
-
-Create a versioned zip for wp-admin upload:
-
-```bash
-./build.sh
-```
-
-Bump the patch version and build:
-
-```bash
-./build.sh --bump
-```
-
-Output: `dist/mrmurphy-apps-{version}.zip`
-
-## Development
-
-This repo lives next to [mrmurphy-theme](https://github.com/mrmurphy/mrmurphy-theme) under `~/projects/`.
+Same as the MrMurphy Apps plugin.

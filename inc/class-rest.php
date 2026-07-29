@@ -731,16 +731,22 @@ server-side endpoints and initialization (see Server-Side Code).
 
 Asset URLs & Base Tag
 ---------------------
-The plugin injects a <base> tag pointing to the uploads directory
-(wp-content/uploads/mrmurphy-apps/{slug}/). This means:
-  - Relative asset paths (src="bundle.js", href="style.css") resolve to
-    the uploads URL — these work transparently.
-  - Forms and History API pushState() with relative paths will resolve
-    against the uploads URL, not the route URL /apps/{slug}/.
-  - Use absolute paths (leading /) or the injected apiBase for form
-    actions, navigation links, and History API calls.
-  - Hash-based routing (#/route) is recommended for SPAs and is
-    unaffected by the base tag.
+The plugin injects a <base> tag pointing to /apps/{slug}/. All relative
+URLs in the app resolve through the plugin's rewrite rule.
+
+  On WordPress.com: visit https://wordpress.com/sites/<site>/settings/static-file-404
+  and enable "Let PHP handle 404s for static files." Without this, the web
+  server returns 404 for requests with static file extensions (.js, .css, .png)
+  before they reach PHP, breaking assets like sw.js and stylesheets.
+
+  On self-hosted WordPress (Apache, nginx): standard try_files or mod_rewrite
+  handles this automatically — no extra configuration needed.
+
+  Forms and History API pushState() with relative paths will resolve against
+  /apps/{slug}/. Use absolute paths (leading /) or the injected apiBase for
+  form actions, navigation links, and History API calls.
+  Hash-based routing (#/route) is recommended for SPAs and is
+  unaffected by the base tag.
 
 Server-Side Code
 ----------------
@@ -788,6 +794,45 @@ Apps can ship PHP files that run on the server:
   with other apps.
   Security: uploading apps requires the manage_mrmurphy_apps capability,
   which implies full trust — same as activating a plugin.
+
+Accessing Environment Variables in Server-Side Code
+-----------------------------------------------------
+  Apps can read evars set via the Management API. Evars are stored as
+  post meta for app-scoped variables and as WordPress options for global
+  variables.
+
+  Read app-scoped evar:
+    $meta = get_post_meta( $post_id, '_mrmurphy_app_evar_' . $name, true );
+    // Returns array: [ 'value' => '...', 'updated_at' => '...' ] or empty string
+
+  Read global evar:
+    $value = get_option( '_mrmurphy_global_evar_' . $name );
+    // Returns array: [ 'value' => '...', 'updated_at' => '...' ] or false
+
+  Helper function (drop into server/routes.php or server/init.php):
+    function mrmurphy_evar( $name, $default = '' ) {
+      global $wpdb;
+      $post = $wpdb->get_row(
+        $wpdb->prepare(
+          "SELECT ID FROM {$wpdb->posts} WHERE post_name = %%s AND post_type = 'mrmurphy_app'",
+          $mrmurphy_app_slug
+        )
+      );
+      if ( $post ) {
+        $data = get_post_meta( $post->ID, '_mrmurphy_app_evar_' . $name, true );
+        if ( is_array( $data ) && isset( $data['value'] ) ) {
+          return $data['value'];
+        }
+      }
+      $data = get_option( '_mrmurphy_global_evar_' . $name );
+      if ( is_array( $data ) && isset( $data['value'] ) ) {
+        return $data['value'];
+      }
+      return $default;
+    }
+
+    // Usage:
+    $api_key = mrmurphy_evar( 'API_KEY', 'default-key' );
 
 Error Responses
 ---------------

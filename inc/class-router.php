@@ -126,11 +126,7 @@ class MRMurphy_Apps_Router {
 			return $html;
 		}
 
-		$uploads = wp_upload_dir();
-		if ( ! empty( $uploads['error'] ) ) {
-			return $html;
-		}
-		$base_href = trailingslashit( $uploads['baseurl'] . '/mrmurphy-apps/' . $slug );
+		$base_href = trailingslashit( home_url( '/' . MRMURPHY_APPS_ROUTE_PREFIX . '/' . $slug ) );
 		$base_tag  = '<base href="' . esc_url( $base_href ) . '">';
 
 		if ( preg_match( '/<head[^>]*>/i', $html ) ) {
