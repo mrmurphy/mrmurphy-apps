@@ -3,4 +3,4 @@
 .vscode/
 *.log
 dist/
-.opencode/goals/state.json.lock/
+.opencode/goals/state.json*
