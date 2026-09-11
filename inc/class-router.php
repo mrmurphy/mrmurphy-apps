@@ -126,7 +126,7 @@ class MRMurphy_Apps_Router {
 			return $html;
 		}
 
-		$base_href = trailingslashit( home_url( '/' . MRMURPHY_APPS_ROUTE_PREFIX . '/' . $slug ) );
+		$base_href = '/' . trim( MRMURPHY_APPS_ROUTE_PREFIX, '/' ) . '/' . $slug . '/';
 		$base_tag  = '<base href="' . esc_url( $base_href ) . '">';
 
 		if ( preg_match( '/<head[^>]*>/i', $html ) ) {
@@ -151,8 +151,8 @@ class MRMurphy_Apps_Router {
 		$data = array(
 			'slug'      => $slug,
 			'namespace' => 'mrmurphy-apps/v1',
-			'root'      => esc_url_raw( rest_url() ),
-			'apiBase'   => esc_url_raw( rest_url( 'apps/v1/' . $slug ) ),
+			'root'      => '/wp-json/',
+			'apiBase'   => '/wp-json/apps/v1/' . $slug,
 			'nonce'     => wp_create_nonce( 'mrmurphy_apps:scope:' . $slug ),
 		);
 
