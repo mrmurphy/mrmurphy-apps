@@ -1502,19 +1502,35 @@ TXT;
 	/**
 	 * Get evars for an app post.
 	 *
+	 * Enumerates evar keys via direct SQL instead of the all-keys
+	 * get_post_meta() read: on WordPress.com Atomic the persistent object
+	 * cache does not return a trustworthy all-keys shape (LIST came back
+	 * empty even for evars written seconds earlier, while single-key
+	 * reads worked). Same landmine class get_global_evars() sidesteps.
+	 * Values arrive as raw meta strings, so maybe_unserialize before the
+	 * is_array payload check. Multi-value keys: first row (lowest
+	 * meta_id) wins, mirroring the old $meta_values[0] semantics.
+	 *
 	 * @param int $post_id Post ID.
 	 * @return array
 	 */
 	private function get_app_evars( $post_id ) {
-		$all_meta = get_post_meta( $post_id );
-		$evars    = array();
-		$prefix   = '_mrmurphy_app_evar_';
-		foreach ( $all_meta as $key => $meta_values ) {
-			if ( 0 !== strpos( $key, $prefix ) ) {
+		global $wpdb;
+		$prefix = '_mrmurphy_app_evar_';
+		$rows   = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT meta_key, meta_value FROM {$wpdb->postmeta} WHERE post_id = %d AND meta_key LIKE %s ORDER BY meta_id ASC",
+				(int) $post_id,
+				$wpdb->esc_like( $prefix ) . '%'
+			)
+		);
+		$evars = array();
+		foreach ( (array) $rows as $row ) {
+			$name = substr( $row->meta_key, strlen( $prefix ) );
+			if ( '' === $name || isset( $evars[ $name ] ) ) {
 				continue;
 			}
-			$name = substr( $key, strlen( $prefix ) );
-			$data = $meta_values[0];
+			$data = maybe_unserialize( $row->meta_value );
 			if ( is_array( $data ) ) {
 				$evars[ $name ] = $data;
 			}

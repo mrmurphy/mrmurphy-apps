@@ -69,6 +69,10 @@ rsync -a \
 	--exclude '.DS_Store' \
 	--exclude '.cursor' \
 	--exclude '.claude' \
+	--exclude '.opencode' \
+	--exclude '.idea' \
+	--exclude '.vscode' \
+	--exclude 'tests' \
 	--exclude '*.log' \
 	--exclude 'dist' \
 	--exclude 'build.sh' \
