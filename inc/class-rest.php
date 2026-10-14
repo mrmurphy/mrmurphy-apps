@@ -28,6 +28,9 @@ class MRMurphy_Apps_REST {
 	/** @var MRMurphy_Apps_Storage */
 	private $storage;
 
+	/** @var array Slugs whose routes.php was already included this request (re-entrancy guard) */
+	private $loaded_app_routes = array();
+
 	/**
 	 * Constructor.
 	 */
@@ -36,6 +39,7 @@ class MRMurphy_Apps_REST {
 
 		add_action( 'rest_api_init', array( $this, 'register_routes' ) );
 		add_action( 'rest_api_init', array( $this, 'load_app_routes' ), 20 );
+		add_action( 'init', array( $this, 'load_app_routes_for_cron' ) );
 		add_action( 'save_post_mrmurphy_app', array( $this, 'flush_routes_cache' ) );
 		add_action( 'before_delete_post', array( $this, 'flush_routes_cache' ) );
 		add_filter( 'rest_authentication_errors', array( $this, 'check_scoped_nonce' ), 5 );
@@ -511,6 +515,10 @@ class MRMurphy_Apps_REST {
 		}
 
 		foreach ( $slugs as $slug ) {
+			if ( isset( $this->loaded_app_routes[ $slug ] ) ) {
+				continue; // re-entrancy guard: a routes file calling rest_get_server() re-fires rest_api_init mid-load
+			}
+			$this->loaded_app_routes[ $slug ] = true;
 			$routes_file = trailingslashit( MRMurphy_Apps_Storage::get_base_directory() ) . $slug . '/server/routes.php';
 			if ( ! file_exists( $routes_file ) ) {
 				continue;
@@ -527,6 +535,18 @@ class MRMurphy_Apps_REST {
 				) );
 			}
 		}
+	}
+
+	/**
+	 * WP-Cron runs in wp-cron.php where rest_api_init never fires — without this, cron hooks
+	 * registered by apps' server/routes.php are silently dead. Load app routes for cron runs
+	 * (and `wp cron event run` under WP-CLI, which defines DOING_CRON) so scheduled actions find their handlers.
+	 */
+	public function load_app_routes_for_cron() {
+		if ( ! function_exists( 'wp_doing_cron' ) || ! wp_doing_cron() ) {
+			return;
+		}
+		$this->load_app_routes();
 	}
 
 	/**
