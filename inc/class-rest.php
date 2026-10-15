@@ -271,6 +271,11 @@ class MRMurphy_Apps_REST {
 							'enum'        => array( 'publish', 'draft' ),
 							'description' => __( 'Desired status: "publish" or "draft".', 'mrmurphy-apps' ),
 						),
+						'coi'    => array(
+							'required'    => false,
+							'type'        => 'boolean',
+							'description' => __( 'Cross-origin isolation headers on the app shell (unlocks SharedArrayBuffer for wasm threads).', 'mrmurphy-apps' ),
+						),
 					),
 				),
 			)
@@ -1179,6 +1184,10 @@ TXT;
 
 		if ( ! in_array( $new_status, array( 'publish', 'draft' ), true ) ) {
 			return new WP_Error( 'invalid_status', __( 'Status must be "publish" or "draft".', 'mrmurphy-apps' ), array( 'status' => 400 ) );
+		}
+
+		if ( $request->has_param( 'coi' ) ) {
+			update_post_meta( (int) $post->ID, 'mrmurphy_app_coi', $request->get_param( 'coi' ) ? '1' : '' );
 		}
 
 		$update_result = wp_update_post(

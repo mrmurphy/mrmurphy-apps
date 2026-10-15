@@ -101,6 +101,12 @@ class MRMurphy_Apps_Router {
 			nocache_headers();
 			header( 'Content-Type: ' . $content_type . '; charset=utf-8' );
 			header( 'X-Robots-Tag: noindex, nofollow', true );
+			// Per-app opt-in (post meta): cross-origin isolation unlocks SharedArrayBuffer,
+			// which Safari withholds by default — without it ONNX wasm runs single-threaded (minutes per sentence).
+			if ( get_post_meta( $app->ID, 'mrmurphy_app_coi', true ) ) {
+				header( 'Cross-Origin-Opener-Policy: same-origin' );
+				header( 'Cross-Origin-Embedder-Policy: require-corp' );
+			}
 			echo $body; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- raw static HTML asset.
 			exit;
 		}
@@ -109,6 +115,14 @@ class MRMurphy_Apps_Router {
 		header( 'Content-Type: ' . $content_type );
 		header( 'Content-Length: ' . (string) filesize( $file_path ) );
 		header( 'X-Robots-Tag: noindex, nofollow', true );
+		// Vite-hashed assets (name-abc12345.js) are content-addressed → immutable.
+		// Plain-named files (sw.js, manifest.webmanifest, icons) must revalidate so
+		// app updates land on first load instead of riding heuristic caches for days.
+		if ( preg_match( '/-[A-Za-z0-9_-]{8,}\.(js|css|woff2?|png|svg|webp)$/i', basename( $file_path ) ) ) {
+			header( 'Cache-Control: public, max-age=31536000, immutable' );
+		} else {
+			header( 'Cache-Control: public, max-age=0, must-revalidate' );
+		}
 
 		readfile( $file_path );
 		exit;
